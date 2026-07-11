@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { unzipSync, zipSync } from 'fflate'
 import {
   ArrowLeft,
   Check,
@@ -7,14 +6,7 @@ import {
   Copy,
   Download,
   Eye,
-  File,
-  FileAudio,
-  FileCode2,
-  FileImage,
   FilePlus,
-  FileText,
-  FileVideo,
-  Folder,
   FolderOpen,
   FolderPlus,
   FolderUp,
@@ -26,7 +18,6 @@ import {
   ListChecks,
   LoaderCircle,
   Moon,
-  MoreHorizontal,
   Pencil,
   RefreshCw,
   Search,
@@ -35,122 +26,23 @@ import {
   Upload,
   X,
 } from 'lucide-react'
+import { EditorDialog } from './components/dialogs/EditorDialog'
+import { FormDialog } from './components/dialogs/FormDialog'
+import { EntryIcon, FileCard, FileRow } from './components/files/FileItems'
+import { MediaPreview } from './components/previews/MediaPreview'
+import { UploadQueue } from './components/upload/UploadQueue'
+import { useDirectory } from './hooks/useDirectory'
+import { useDragAndDrop } from './hooks/useDragAndDrop'
+import { useSelection } from './hooks/useSelection'
+import { useFileOperations } from './hooks/useFileOperations'
+import { useUploads } from './hooks/useUploads'
+import { extension, formatBytes, formatDate, isDirectory, previewKind } from './lib/files'
+import { joinPath, parentPath } from './lib/paths'
+import type { DirectoryData, PathItem, RowActionMenu, Theme, Toast, ViewMode } from './types'
 import './App.css'
 
-type PathType = 'Dir' | 'SymlinkDir' | 'File' | 'SymlinkFile'
-type ViewMode = 'grid' | 'list'
-type Theme = 'light' | 'dark'
-type PreviewKind = 'image' | 'audio' | 'video'
-
-interface PathItem {
-  path_type: PathType
-  name: string
-  mtime: number
-  size: number
-}
-
-interface DirectoryData {
-  href: string
-  allow_upload: boolean
-  allow_delete: boolean
-  allow_search: boolean
-  allow_archive: boolean
-  dir_exists: boolean
-  user?: string
-  paths: PathItem[]
-}
-
-interface Toast {
-  tone: 'success' | 'error' | 'info'
-  message: string
-}
-
-interface UploadTask {
-  id: string
-  name: string
-  progress: number
-  status: 'queued' | 'uploading' | 'complete' | 'error'
-  error?: string
-}
-
-interface UploadEntry {
-  file: File
-  relativePath: string
-}
-
-interface SelectionBox {
-  left: number
-  top: number
-  width: number
-  height: number
-}
-
-interface LassoSelection {
-  startX: number
-  startY: number
-  initialNames: Set<string>
-}
-
-interface DirectoryPickerFileHandle {
-  kind: 'file'
-  name: string
-  getFile: () => Promise<File>
-}
-
-interface DirectoryPickerDirectoryHandle {
-  kind: 'directory'
-  name: string
-  values: () => AsyncIterable<DirectoryPickerHandle>
-}
-
-type DirectoryPickerHandle = DirectoryPickerFileHandle | DirectoryPickerDirectoryHandle
-
-interface DirectoryPickerWindow extends Window {
-  showDirectoryPicker?: () => Promise<DirectoryPickerDirectoryHandle>
-}
-
-interface DroppedFileEntry {
-  isFile: true
-  isDirectory: false
-  name: string
-  file: (success: (file: File) => void, failure?: (error: DOMException) => void) => void
-}
-
-interface DroppedDirectoryEntry {
-  isFile: false
-  isDirectory: true
-  name: string
-  createReader: () => { readEntries: (success: (entries: DroppedEntry[]) => void, failure?: (error: DOMException) => void) => void }
-}
-
-type DroppedEntry = DroppedFileEntry | DroppedDirectoryEntry
-
-interface DroppedItem {
-  getAsFileSystemHandle?: () => Promise<DirectoryPickerHandle | null>
-  webkitGetAsEntry?: () => DroppedEntry | null
-}
-
-interface FormDialog {
-  title: string
-  label: string
-  initialValue: string
-  submitLabel: string
-  onSubmit: (value: string) => Promise<void>
-}
-
-interface RowActionMenu {
-  item: PathItem
-  top: number
-  left: number
-}
-
 const DEFAULT_SERVER = window.location.origin
-const BINARY_FILE = /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|tiff?|psd|eps|pdf|docx?|xlsx?|pptx?|key|numbers|pages|zip|tar|gz|bz2|7z|rar|zst|xz|iso|bin|exe|dll|so|dylib|elf|wasm|o|a|lib|obj|pyc|class|jar|war|ear|dex|apk|aab|ttf|otf|woff2?|eot|mp[34]|avi|mkv|mov|wmv|flv|webm|og[gv]|wav|flac|aac|m4a|opus|ogg|mka|swf|dat|db|sqlite|s3db|mdb|gzip?)$/i
 const INDEX_DATA_MARKER = ['__INDEX', 'DATA__'].join('_')
-const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|tiff?)$/i
-const AUDIO_FILE = /\.(?:mp3|ogg|opus|flac|m4a|aac|wav)$/i
-const VIDEO_FILE = /\.(?:mp4|mkv|webm|mov)$/i
-const TOUCH_DOUBLE_TAP_DELAY = 350
 
 function getBootstrapData(): Partial<DirectoryData> & { uri_prefix?: string } {
   const encoded = document.getElementById('index-data')?.textContent?.trim()
@@ -163,109 +55,19 @@ function getBootstrapData(): Partial<DirectoryData> & { uri_prefix?: string } {
   }
 }
 
-function isDirectory(item: PathItem) {
-  return item.path_type.endsWith('Dir')
-}
-
-function hasExtension(name: string) {
-  const index = name.lastIndexOf('.')
-  return index > 0 && index < name.length - 1
-}
-
-function previewKind(item: PathItem): PreviewKind | null {
-  if (isDirectory(item)) return null
-  if (IMAGE_FILE.test(item.name)) return 'image'
-  if (AUDIO_FILE.test(item.name)) return 'audio'
-  if (VIDEO_FILE.test(item.name)) return 'video'
-  return null
-}
-
-async function isBinaryContent(url: URL): Promise<boolean> {
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Range': 'bytes=0-3' },
-      credentials: 'same-origin',
-    })
-    if (!response.ok) return false
-    const buffer = await response.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    if (bytes.length >= 4) {
-      // ELF magic: \x7fELF
-      if (bytes[0] === 0x7f && bytes[1] === 0x45 && bytes[2] === 0x4c && bytes[3] === 0x46) return true
-    }
-    return false
-  } catch {
-    return false
-  }
-}
-
-function formatBytes(bytes: number) {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const value = bytes / 1024 ** index
-  return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`
-}
-
-function formatDate(timestamp: number) {
-  if (!timestamp) return 'Unknown'
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(timestamp)
-}
-
-function extension(name: string) {
-  const suffix = name.split('.').pop()
-  return suffix && suffix !== name ? suffix.toUpperCase() : 'FILE'
-}
-
-function parentPath(path: string) {
-  const parts = path.split('/').filter(Boolean)
-  parts.pop()
-  return parts.length ? `/${parts.join('/')}/` : '/'
-}
-
-function joinPath(directory: string, name: string) {
-  const parts = `${directory}/${name}`.split('/').filter((part) => part && part !== '.')
-  return `/${parts.join('/')}`
-}
-
-function directoryPath(path: string) {
-  return path.endsWith('/') ? path : `${path}/`
-}
-
 function App() {
   const bootstrap = useMemo(getBootstrapData, [])
   const serverUrl = DEFAULT_SERVER
-  const [directory, setDirectory] = useState(() => directoryPath(bootstrap.href || '/'))
-  const [data, setData] = useState<DirectoryData | null>(null)
-  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<PathItem[] | null>(null)
-  const [searchResultQuery, setSearchResultQuery] = useState<string | null>(null)
-  const [isSearching, setIsSearching] = useState(false)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('dufs-theme') as Theme) || 'light')
-  const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set())
-  const [selectionMode, setSelectionMode] = useState(false)
   const [showToolbarMenu, setShowToolbarMenu] = useState(false)
   const [compactToolbar, setCompactToolbar] = useState(false)
   const [collapsedBreadcrumbs, setCollapsedBreadcrumbs] = useState(0)
-  const [dialog, setDialog] = useState<FormDialog | null>(null)
-  const [editor, setEditor] = useState<{ item: PathItem; content: string } | null>(null)
-  const [preview, setPreview] = useState<PathItem | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
   const [rowActionMenu, setRowActionMenu] = useState<RowActionMenu | null>(null)
-  const [draggedItem, setDraggedItem] = useState<PathItem | null>(null)
-  const [dropTargetName, setDropTargetName] = useState<string | null>(null)
-  const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([])
   const [uploadQueueOpen, setUploadQueueOpen] = useState(false)
   const [uploadQueuePinned, setUploadQueuePinned] = useState(false)
-  const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
   const toolbarMenuRef = useRef<HTMLDivElement>(null)
@@ -274,7 +76,7 @@ function App() {
   const breadcrumbsRef = useRef<HTMLElement>(null)
   const breadcrumbMeasureRef = useRef<HTMLElement>(null)
   const rowActionMenuRef = useRef<HTMLDivElement>(null)
-  const lassoSelectionRef = useRef<LassoSelection | null>(null)
+  const { clearSelection, endItemSelection, selectItem, selectedNames, selectionBox, selectionMode, setSelectedNames, setSelectionMode, startItemSelection, updateItemSelection } = useSelection(() => setRowActionMenu(null))
 
   const endpoint = useCallback((path: string, query?: Record<string, string>) => {
     const url = new URL(serverUrl.trim() || DEFAULT_SERVER, window.location.origin)
@@ -301,83 +103,17 @@ function App() {
     throw new Error(text || `Request failed (${response.status})`)
   }, [])
 
-  const loadDirectory = useCallback(async (path = directory) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await fetch(endpoint(path, { json: '' }), {
-        credentials: 'same-origin',
-      })
-      await assertOk(response)
-      const payload = (await response.json()) as DirectoryData
-      setData(payload)
-      setSelectedNames(new Set())
-    } catch (requestError) {
-      setData(null)
-      setError(requestError instanceof Error ? requestError.message : 'Unable to reach the Dufs server.')
-    } finally {
-      setLoading(false)
-    }
-  }, [assertOk, directory, endpoint])
-
-  const activeSearch = search.trim()
+  const { activeSearch, data, directory, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch } = useDirectory({
+    assertOk,
+    endpoint,
+    initialDirectory: bootstrap.href || '/',
+    onSelectionReset: setSelectedNames,
+  })
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     localStorage.setItem('dufs-theme', theme)
   }, [theme])
-
-  useEffect(() => {
-    void loadDirectory()
-  }, [loadDirectory])
-
-  useEffect(() => {
-    if (!activeSearch || !data?.allow_search) {
-      setSearchResults(null)
-      setSearchResultQuery(null)
-      setIsSearching(false)
-      return undefined
-    }
-
-    let current = true
-    const controller = new AbortController()
-    let loadingDelay: number | undefined
-    setSearchResultQuery(null)
-    setIsSearching(false)
-    const delay = window.setTimeout(() => {
-      // Match the reference UI: only show a pending state for genuinely slow searches.
-      loadingDelay = window.setTimeout(() => {
-        if (current) setIsSearching(true)
-      }, 150)
-      void fetch(endpoint(directory, { json: '', q: activeSearch }), {
-        credentials: 'same-origin',
-        signal: controller.signal,
-      })
-        .then(async (response) => {
-          await assertOk(response)
-          return response.json() as Promise<DirectoryData>
-        })
-        .then((payload) => {
-          if (!current) return
-          if (loadingDelay !== undefined) window.clearTimeout(loadingDelay)
-          setSearchResults(payload.paths)
-          setSearchResultQuery(activeSearch)
-          setIsSearching(false)
-        })
-        .catch(() => {
-          if (!current || controller.signal.aborted) return
-          if (loadingDelay !== undefined) window.clearTimeout(loadingDelay)
-          setIsSearching(false)
-        })
-    }, 350)
-
-    return () => {
-      current = false
-      window.clearTimeout(delay)
-      if (loadingDelay !== undefined) window.clearTimeout(loadingDelay)
-      controller.abort()
-    }
-  }, [activeSearch, assertOk, data, directory, endpoint])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -441,16 +177,6 @@ function App() {
     if (!compactToolbar) setShowToolbarMenu(false)
   }, [compactToolbar])
 
-  const items = useMemo(() => {
-    const paths = activeSearch
-      ? searchResultQuery === activeSearch ? searchResults ?? [] : data?.paths ?? []
-      : data?.paths ?? []
-    return [...paths].sort((left, right) => {
-      if (isDirectory(left) !== isDirectory(right)) return isDirectory(left) ? -1 : 1
-      return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' })
-    })
-  }, [activeSearch, data, searchResultQuery, searchResults])
-
   const selectedItems = useMemo(() => items.filter((item) => selectedNames.has(item.name)), [items, selectedNames])
   const selected = selectedItems.length === 1 ? selectedItems[0] : null
 
@@ -504,523 +230,44 @@ function App() {
     }
   }
 
-  const navigate = (nextDirectory: string) => {
-    setSearch('')
-    setSearchResults(null)
-    setSearchResultQuery(null)
-    setIsSearching(false)
-    setDraggedItem(null)
-    setDropTargetName(null)
-    setDirectory(directoryPath(nextDirectory))
-  }
+  const canWrite = Boolean(data?.allow_upload)
+  const canDelete = Boolean(data?.allow_delete)
+  const canMove = canWrite && canDelete
 
-  const clearSelection = () => {
-    setSelectedNames(new Set())
-    setSelectionMode(false)
-  }
+  const { handleFileDragOver, handleFileDrop, selectFolderForUpload, uploadFiles, uploadFolderFiles, uploadTasks } = useUploads({
+    allowUpload: data?.allow_upload,
+    directory,
+    endpoint,
+    assertOk,
+    notify,
+    run,
+  })
 
-  const selectItem = (item: PathItem, event: React.MouseEvent) => {
-    const addToSelection = selectionMode || event.metaKey || event.ctrlKey
-    setSelectedNames((current) => {
-      if (!addToSelection) return new Set([item.name])
-      const next = new Set(current)
-      if (next.has(item.name)) next.delete(item.name)
-      else next.add(item.name)
-      return next
-    })
-  }
+  const { canDownloadSelection, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, openEditor, openItem, preview, renameItem, saveEditor, setDialog, setEditor, setPreview } = useFileOperations({
+    allowArchive: data?.allow_archive,
+    assertOk,
+    clearSelection,
+    directory,
+    endpoint,
+    navigate,
+    notify,
+    run,
+    selectedItems,
+    setBusy,
+  })
 
-  const startItemSelection = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return
-    if ((event.target as HTMLElement).closest('.file-row, .file-card, button, input, a')) return
+  const { clearDragState, dragOverDirectory, draggedItem, dropIntoDirectory, dropTargetName, endDrag, leaveDirectory, startDrag } = useDragAndDrop({
+    assertOk,
+    canMove,
+    clearSelection,
+    directory,
+    endpoint,
+    run,
+  })
 
-    const rect = event.currentTarget.getBoundingClientRect()
-    const startX = Math.min(Math.max(event.clientX, rect.left), rect.right)
-    const startY = Math.min(Math.max(event.clientY, rect.top), rect.bottom)
-    const initialNames = event.metaKey || event.ctrlKey ? new Set(selectedNames) : new Set<string>()
-
-    lassoSelectionRef.current = { startX, startY, initialNames }
-    setSelectedNames(initialNames)
-    setSelectionBox({ left: startX, top: startY, width: 0, height: 0 })
-    setRowActionMenu(null)
-    event.currentTarget.setPointerCapture(event.pointerId)
-    event.preventDefault()
-  }
-
-  const updateItemSelection = (event: React.PointerEvent<HTMLDivElement>) => {
-    const lasso = lassoSelectionRef.current
-    if (!lasso) return
-
-    const view = event.currentTarget
-    const bounds = view.getBoundingClientRect()
-    const endX = Math.min(Math.max(event.clientX, bounds.left), bounds.right)
-    const endY = Math.min(Math.max(event.clientY, bounds.top), bounds.bottom)
-    const left = Math.min(lasso.startX, endX)
-    const top = Math.min(lasso.startY, endY)
-    const right = Math.max(lasso.startX, endX)
-    const bottom = Math.max(lasso.startY, endY)
-
-    setSelectionBox({ left, top, width: right - left, height: bottom - top })
-    const next = new Set(lasso.initialNames)
-    for (const itemElement of view.querySelectorAll<HTMLElement>('.file-row[data-item-name], .file-card[data-item-name]')) {
-      const itemBounds = itemElement.getBoundingClientRect()
-      if (itemBounds.left < right && itemBounds.right > left && itemBounds.top < bottom && itemBounds.bottom > top) {
-        const name = itemElement.dataset.itemName
-        if (name) next.add(name)
-      }
-    }
-    setSelectedNames(next)
-  }
-
-  const endItemSelection = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!lassoSelectionRef.current) return
-    lassoSelectionRef.current = null
-    setSelectionBox(null)
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-
-  const updateUploadTask = (id: string, update: Partial<UploadTask>) => {
-    setUploadTasks((tasks) => tasks.map((task) => task.id === id ? { ...task, ...update } : task))
-  }
-
-  const uploadFile = async (file: File, path: string, taskId: string) => {
-    const response = await fetch(endpoint(path), {
-      method: 'PUT',
-      body: file,
-      credentials: 'same-origin',
-    })
-    await assertOk(response)
-    updateUploadTask(taskId, { progress: 100, status: 'complete' })
-  }
-
-  const uploadEntries = async (entries: UploadEntry[], directories: string[] = []) => {
-    if (!data?.allow_upload) return notify('Uploads are not enabled on this server.', 'error')
-    if (!entries.length && !directories.length) return
-    const tasks = entries.map((entry, index) => ({
-      id: `${Date.now()}-${index}-${entry.file.name}`,
-      name: entry.relativePath,
-      progress: 0,
-      status: 'queued' as const,
-    }))
-    setUploadTasks((current) => [...current, ...tasks])
-    await run('upload', async () => {
-      try {
-        for (const relativeDirectory of [...new Set(directories)].sort((left, right) => left.split('/').length - right.split('/').length)) {
-          const response = await fetch(endpoint(directoryPath(joinPath(directory, relativeDirectory))), {
-            method: 'MKCOL',
-            credentials: 'same-origin',
-          })
-          if (!response.ok && response.status !== 405) await assertOk(response)
-        }
-
-        for (const [index, entry] of entries.entries()) {
-          updateUploadTask(tasks[index].id, { status: 'uploading' })
-          await uploadFile(entry.file, joinPath(directory, entry.relativePath), tasks[index].id)
-        }
-      } catch (uploadError) {
-        const message = uploadError instanceof Error ? uploadError.message : 'Unable to upload this item.'
-        setUploadTasks((current) => current.map((task) => tasks.some(({ id }) => id === task.id) && task.status !== 'complete'
-          ? { ...task, status: 'error', error: message }
-          : task))
-        throw uploadError
-      }
-    }, entries.length ? `${entries.length} ${entries.length === 1 ? 'item' : 'items'} uploaded` : `Created "${directories[0]}"`)
-  }
-
-  const uploadFiles = async (files: FileList | File[]) => {
-    const entries = Array.from(files).map((file) => ({ file, relativePath: file.name }))
-    await uploadEntries(entries)
-  }
-
-  const uploadFolderFiles = async (files: FileList | File[]) => {
-    const list = Array.from(files)
-    if (!list.length) return
-    const directories = new Set<string>()
-    const entries = list.map((file) => {
-      const parts = file.webkitRelativePath.split('/').filter(Boolean)
-      parts.pop()
-      for (let depth = 1; depth <= parts.length; depth += 1) directories.add(parts.slice(0, depth).join('/'))
-      return { file, relativePath: file.webkitRelativePath }
-    })
-    await uploadEntries(entries, [...directories])
-  }
-
-  const selectFolderForUpload = async () => {
-    const picker = (window as DirectoryPickerWindow).showDirectoryPicker
-    if (!picker) {
-      folderInputRef.current?.click()
-      return
-    }
-    try {
-      const root = await picker.call(window)
-      const entries: UploadEntry[] = []
-      const directories: string[] = []
-      const collect = async (handle: DirectoryPickerHandle, relativePath: string): Promise<void> => {
-        if (handle.kind === 'file') {
-          entries.push({ file: await handle.getFile(), relativePath })
-          return
-        }
-        directories.push(relativePath)
-        for await (const child of handle.values()) await collect(child, `${relativePath}/${child.name}`)
-      }
-      await collect(root, root.name)
-      await uploadEntries(entries, directories)
-    } catch (folderError) {
-      if (folderError instanceof DOMException && folderError.name === 'AbortError') return
-      notify(folderError instanceof Error ? folderError.message : 'Unable to read the selected folder.', 'error')
-    }
-  }
-
-  const uploadDroppedItems = async (dataTransfer: DataTransfer) => {
-    const droppedItems = Array.from(dataTransfer.items).map((item) => item as unknown as DroppedItem)
-    // Legacy entries must be read synchronously while the drop event is still active.
-    const droppedEntries = droppedItems
-      .map((item) => item.webkitGetAsEntry?.() ?? null)
-      .filter((entry): entry is DroppedEntry => entry !== null)
-    if (dataTransfer.files.length && !droppedEntries.some((entry) => entry.isDirectory)) {
-      await uploadFiles(dataTransfer.files)
-      return
-    }
-
-    const modernHandleRequests = droppedEntries.length
-      ? []
-      : droppedItems.map((item) => item.getAsFileSystemHandle?.() ?? Promise.resolve(null))
-
-    const files: UploadEntry[] = []
-    const directories: string[] = []
-    let modernHandles: DirectoryPickerHandle[]
-    try {
-      modernHandles = (await Promise.all(modernHandleRequests)).filter((handle): handle is DirectoryPickerHandle => handle !== null)
-    } catch (dropError) {
-      notify(dropError instanceof Error ? dropError.message : 'Unable to read the dropped items.', 'error')
-      return
-    }
-    if (modernHandles.length) {
-      const collectHandle = async (handle: DirectoryPickerHandle, relativePath: string): Promise<void> => {
-        if (handle.kind === 'file') {
-          files.push({ file: await handle.getFile(), relativePath })
-          return
-        }
-        directories.push(relativePath)
-        for await (const child of handle.values()) await collectHandle(child, `${relativePath}/${child.name}`)
-      }
-      try {
-        for (const handle of modernHandles) await collectHandle(handle, handle.name)
-        await uploadEntries(files, directories)
-      } catch (dropError) {
-        notify(dropError instanceof Error ? dropError.message : 'Unable to read the dropped folder.', 'error')
-      }
-      return
-    }
-
-    if (!droppedEntries.length) {
-      await uploadFiles(dataTransfer.files)
-      return
-    }
-
-    const readEntries = (reader: ReturnType<DroppedDirectoryEntry['createReader']>) => new Promise<DroppedEntry[]>((resolve, reject) => {
-      reader.readEntries(resolve, reject)
-    })
-    const readFile = (entry: DroppedFileEntry) => new Promise<File>((resolve, reject) => {
-      entry.file(resolve, reject)
-    })
-    const collect = async (entry: DroppedEntry, relativePath: string): Promise<void> => {
-      if (entry.isFile) {
-        files.push({ file: await readFile(entry), relativePath })
-        return
-      }
-      directories.push(relativePath)
-      // Chromium returns large directories in batches, so keep reading until exhausted.
-      const reader = entry.createReader()
-      while (true) {
-        const children = await readEntries(reader)
-        if (!children.length) break
-        for (const child of children) await collect(child, `${relativePath}/${child.name}`)
-      }
-    }
-
-    try {
-      for (const entry of droppedEntries) await collect(entry, entry.name)
-      await uploadEntries(files, directories)
-    } catch (dropError) {
-      notify(dropError instanceof Error ? dropError.message : 'Unable to read the dropped folder.', 'error')
-    }
-  }
-
-  const handleFileDragOver = (event: React.DragEvent) => {
-    if (!Array.from(event.dataTransfer.types).includes('Files')) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-  }
-
-  const handleFileDrop = (event: React.DragEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    void uploadDroppedItems(event.dataTransfer)
-  }
-
-  const createDirectory = () => {
-    setDialog({
-      title: 'New folder',
-      label: 'Folder name',
-      initialValue: '',
-      submitLabel: 'Create folder',
-      onSubmit: async (name) => {
-        await run('create-folder', async () => {
-          const response = await fetch(endpoint(directoryPath(joinPath(directory, name))), {
-            method: 'MKCOL',
-            credentials: 'same-origin',
-          })
-          await assertOk(response)
-        }, `Created "${name}"`)
-      },
-    })
-  }
-
-  const createFile = () => {
-    setDialog({
-      title: 'New file',
-      label: 'File name',
-      initialValue: '',
-      submitLabel: 'Create file',
-      onSubmit: async (name) => {
-        await run('create-file', async () => {
-          const response = await fetch(endpoint(joinPath(directory, name)), {
-            method: 'PUT',
-            body: '',
-            credentials: 'same-origin',
-          })
-          await assertOk(response)
-        }, `Created "${name}"`)
-      },
-    })
-  }
-
-  const renameItem = (item: PathItem) => {
-    setDialog({
-      title: `Rename ${isDirectory(item) ? 'folder' : 'file'}`,
-      label: 'New name',
-      initialValue: item.name,
-      submitLabel: 'Rename',
-      onSubmit: async (name) => {
-        await run('rename', async () => {
-          const source = joinPath(directory, item.name)
-          const destination = endpoint(joinPath(directory, name)).toString()
-          const response = await fetch(endpoint(source), {
-            method: 'MOVE',
-            headers: { Destination: destination, Overwrite: 'F' },
-            credentials: 'same-origin',
-          })
-          await assertOk(response)
-        }, `Renamed to "${name}"`)
-      },
-    })
-  }
-
-  const copyItem = (item: PathItem) => {
-    setDialog({
-      title: `Copy ${isDirectory(item) ? 'folder' : 'file'}`,
-      label: 'Copy name',
-      initialValue: `${item.name} copy`,
-      submitLabel: 'Create copy',
-      onSubmit: async (name) => {
-        await run('copy', async () => {
-          const response = await fetch(endpoint(joinPath(directory, item.name)), {
-            method: 'COPY',
-            headers: { Destination: endpoint(joinPath(directory, name)).toString(), Overwrite: 'F' },
-            credentials: 'same-origin',
-          })
-          await assertOk(response)
-        }, `Created "${name}"`)
-      },
-    })
-  }
-
-  const deleteItem = async (item: PathItem) => {
-    if (!window.confirm(`Delete "${item.name}"? This cannot be undone.`)) return
-    await run('delete', async () => {
-      const response = await fetch(endpoint(joinPath(directory, item.name)), {
-        method: 'DELETE',
-        credentials: 'same-origin',
-      })
-      await assertOk(response)
-    }, `Deleted "${item.name}"`)
-  }
-
-  const openEditor = async (item: PathItem) => {
-    if (BINARY_FILE.test(item.name)) {
-      notify('This file format cannot be edited here.', 'info')
-      return
-    }
-    if (!hasExtension(item.name)) {
-      const url = endpoint(joinPath(directory, item.name))
-      if (await isBinaryContent(url)) {
-        notify('This file format cannot be edited here.', 'info')
-        return
-      }
-    }
-    setBusy('open-editor')
-    try {
-      const response = await fetch(endpoint(joinPath(directory, item.name)), { credentials: 'same-origin' })
-      await assertOk(response)
-      setEditor({ item, content: await response.text() })
-    } catch (requestError) {
-      notify(requestError instanceof Error ? requestError.message : 'Unable to open the file.', 'error')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const saveEditor = async () => {
-    if (!editor) return
-    await run('save-editor', async () => {
-      const response = await fetch(endpoint(joinPath(directory, editor.item.name)), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-        body: editor.content,
-        credentials: 'same-origin',
-      })
-      await assertOk(response)
-      setEditor(null)
-    }, `Saved "${editor.item.name}"`)
-  }
-
-  const download = (item: PathItem) => {
-    const url = endpoint(joinPath(directory, item.name), isDirectory(item) ? { zip: '' } : undefined)
-    const anchor = document.createElement('a')
-    anchor.href = url.toString()
-    anchor.download = item.name
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-  }
-
-  const downloadSelection = async () => {
-    if (!selectedItems.length) return
-    if (selectedItems.some(isDirectory) && !data?.allow_archive) {
-      notify('This server does not allow downloading folders as archives.', 'error')
-      return
-    }
-
-    setBusy('download-selection')
-    try {
-      const archiveRoot = `dufs-batch-${new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '')}`
-      const entries: Record<string, Uint8Array> = {}
-      for (const item of selectedItems) {
-        if (isDirectory(item)) {
-          const response = await fetch(endpoint(directoryPath(joinPath(directory, item.name)), { zip: '' }), {
-            credentials: 'same-origin',
-          })
-          await assertOk(response)
-          const contents = unzipSync(new Uint8Array(await response.arrayBuffer()))
-          const entryNames = Object.entries(contents)
-          if (!entryNames.length) entries[`${archiveRoot}/${item.name}/`] = new Uint8Array()
-          for (const [entryName, bytes] of entryNames) {
-            const safeName = entryName.split('/').filter((part) => part && part !== '.' && part !== '..').join('/')
-            if (safeName) entries[`${archiveRoot}/${item.name}/${safeName}`] = bytes
-          }
-          continue
-        }
-
-        const response = await fetch(endpoint(joinPath(directory, item.name)), { credentials: 'same-origin' })
-        await assertOk(response)
-        entries[`${archiveRoot}/${item.name}`] = new Uint8Array(await response.arrayBuffer())
-      }
-
-      const archive = zipSync(entries, { level: 6 })
-      const url = URL.createObjectURL(new Blob([archive.buffer], { type: 'application/zip' }))
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `${archiveRoot}.zip`
-      document.body.appendChild(anchor)
-      anchor.click()
-      anchor.remove()
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      notify(`Downloaded ${selectedItems.length} items as a ZIP archive`)
-    } catch (downloadError) {
-      notify(downloadError instanceof Error ? downloadError.message : 'Unable to create the ZIP archive.', 'error')
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const deleteSelection = async () => {
-    if (!selectedItems.length || !window.confirm(`Delete ${selectedItems.length} selected items? This cannot be undone.`)) return
-    await run('delete-selection', async () => {
-      for (const item of selectedItems) {
-        const response = await fetch(endpoint(joinPath(directory, item.name)), {
-          method: 'DELETE',
-          credentials: 'same-origin',
-        })
-        await assertOk(response)
-      }
-    }, `Deleted ${selectedItems.length} selected items`)
-    clearSelection()
-  }
-
-  const openItem = (item: PathItem) => {
-    if (isDirectory(item)) return navigate(joinPath(directory, item.name))
-    if (previewKind(item)) {
-      setPreview(item)
-      return
-    }
-    window.open(endpoint(joinPath(directory, item.name)).toString(), '_blank', 'noopener,noreferrer')
-  }
-
-  const startDrag = (item: PathItem, event: React.DragEvent) => {
-    if (!canMove) return
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', item.name)
-    setDraggedItem(item)
-    setDropTargetName(null)
-  }
-
-  const endDrag = () => {
-    setDraggedItem(null)
-    setDropTargetName(null)
-  }
-
-  const canDropInto = (target: PathItem) => {
-    if (!draggedItem || !isDirectory(target) || draggedItem.name === target.name) return false
-    if (!isDirectory(draggedItem)) return true
-    const sourceDirectory = directoryPath(joinPath(directory, draggedItem.name))
-    const targetDirectory = directoryPath(joinPath(directory, target.name))
-    return !targetDirectory.startsWith(sourceDirectory)
-  }
-
-  const dragOverDirectory = (target: PathItem, event: React.DragEvent) => {
-    if (!canDropInto(target)) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    setDropTargetName(target.name)
-  }
-
-  const leaveDirectory = (target: PathItem, event: React.DragEvent) => {
-    if (event.currentTarget.contains(event.relatedTarget as Node)) return
-    setDropTargetName((current) => current === target.name ? null : current)
-  }
-
-  const moveIntoDirectory = async (source: PathItem, target: PathItem) => {
-    const targetDirectory = directoryPath(joinPath(directory, target.name))
-    await run('move', async () => {
-      const response = await fetch(endpoint(joinPath(directory, source.name)), {
-        method: 'MOVE',
-        headers: { Destination: endpoint(joinPath(targetDirectory, source.name)).toString(), Overwrite: 'F' },
-        credentials: 'same-origin',
-      })
-      await assertOk(response)
-    }, `Moved "${source.name}" to "${target.name}"`)
-    clearSelection()
-  }
-
-  const dropIntoDirectory = (target: PathItem, event: React.DragEvent) => {
-    if (!draggedItem || !canDropInto(target)) return
-    event.preventDefault()
-    event.stopPropagation()
-    const source = draggedItem
-    endDrag()
-    void moveIntoDirectory(source, target)
-  }
+  useEffect(() => {
+    clearDragState()
+  }, [clearDragState, directory])
 
   const openRowActionMenu = (item: PathItem, anchor: HTMLButtonElement) => {
     const rect = anchor.getBoundingClientRect()
@@ -1045,11 +292,6 @@ function App() {
       return next
     })
   }
-
-  const canWrite = Boolean(data?.allow_upload)
-  const canDelete = Boolean(data?.allow_delete)
-  const canMove = canWrite && canDelete
-  const canDownloadSelection = selectedItems.length > 0 && (!selectedItems.some(isDirectory) || Boolean(data?.allow_archive))
 
   const renderFileArea = () => {
     if (error) {
@@ -1147,7 +389,7 @@ function App() {
             <button className="tool-button" type="button" onClick={() => fileInputRef.current?.click()} disabled={!canWrite} title="Upload files">
               <Upload size={16} /> <span>Upload</span>
             </button>
-            <button className="tool-button" type="button" onClick={() => void selectFolderForUpload()} disabled={!canWrite} title="Upload folder">
+            <button className="tool-button" type="button" onClick={() => void selectFolderForUpload(folderInputRef.current)} disabled={!canWrite} title="Upload folder">
               <FolderUp size={16} /> <span>Upload folder</span>
             </button>
           </div>
@@ -1159,7 +401,7 @@ function App() {
               <button className="tool-button" type="button" onClick={() => { createFile(); setShowToolbarMenu(false) }} disabled={!canWrite}><FilePlus size={15} /> New file</button>
               <button className="tool-button" type="button" onClick={() => { createDirectory(); setShowToolbarMenu(false) }} disabled={!canWrite}><FolderPlus size={15} /> New folder</button>
               <button className="tool-button" type="button" onClick={() => { fileInputRef.current?.click(); setShowToolbarMenu(false) }} disabled={!canWrite}><Upload size={15} /> Upload files</button>
-              <button className="tool-button" type="button" onClick={() => { void selectFolderForUpload(); setShowToolbarMenu(false) }} disabled={!canWrite}><FolderUp size={15} /> Upload folder</button>
+              <button className="tool-button" type="button" onClick={() => { void selectFolderForUpload(folderInputRef.current); setShowToolbarMenu(false) }} disabled={!canWrite}><FolderUp size={15} /> Upload folder</button>
             </div>
           )}
           <input ref={fileInputRef} className="visually-hidden" type="file" multiple onChange={(event) => void uploadFiles(event.target.files ?? [])} />
@@ -1277,359 +519,10 @@ function App() {
         </div>
       )}
       {toast && <div className={`toast ${toast.tone}`} role="status"><span>{toast.tone === 'error' ? <X size={16} /> : <Check size={16} />}</span>{toast.message}<button type="button" onClick={() => setToast(null)} title="Dismiss"><X size={15} /></button></div>}
-      {dialog && <FormDialogView dialog={dialog} onClose={() => setDialog(null)} />}
-      {editor && <EditorView editor={editor} onChange={(content) => setEditor({ ...editor, content })} onClose={() => setEditor(null)} onSave={() => void saveEditor()} />}
-      {preview && <MediaPreviewView item={preview} source={endpoint(joinPath(directory, preview.name)).toString()} onClose={() => setPreview(null)} />}
+      {dialog && <FormDialog dialog={dialog} onClose={() => setDialog(null)} />}
+      {editor && <EditorDialog editor={editor} onChange={(content) => setEditor({ ...editor, content })} onClose={() => setEditor(null)} onSave={() => void saveEditor()} />}
+      {preview && <MediaPreview item={preview} source={endpoint(joinPath(directory, preview.name)).toString()} onClose={() => setPreview(null)} />}
     </main>
-  )
-}
-
-function EntryIcon({ item, size = 24 }: { item: PathItem; size?: number }) {
-  if (isDirectory(item)) return <Folder size={size} fill="currentColor" />
-  if (IMAGE_FILE.test(item.name)) return <FileImage size={size} />
-  if (AUDIO_FILE.test(item.name)) return <FileAudio size={size} />
-  if (VIDEO_FILE.test(item.name)) return <FileVideo size={size} />
-  if (!BINARY_FILE.test(item.name)) return <FileCode2 size={size} />
-  if (/\.(?:pdf|docx?|pptx?)$/i.test(item.name)) return <FileText size={size} />
-  return <File size={size} />
-}
-
-interface DragDropItemProps {
-  draggable: boolean
-  dragging: boolean
-  dropTarget: boolean
-  onDragStart: (item: PathItem, event: React.DragEvent) => void
-  onDragEnd: () => void
-  onDragOver: (item: PathItem, event: React.DragEvent) => void
-  onDragLeave: (item: PathItem, event: React.DragEvent) => void
-  onDrop: (item: PathItem, event: React.DragEvent) => void
-}
-
-function useTouchDoubleTapOpen(onOpen: () => void) {
-  const lastTouchTapRef = useRef(0)
-  const ignoreNativeDoubleClickRef = useRef(false)
-
-  const handlePointerUp = useCallback((event: React.PointerEvent<HTMLElement>) => {
-    if (event.pointerType !== 'touch') return
-
-    const elapsed = event.timeStamp - lastTouchTapRef.current
-    if (elapsed <= 0 || elapsed > TOUCH_DOUBLE_TAP_DELAY) {
-      lastTouchTapRef.current = event.timeStamp
-      return
-    }
-
-    lastTouchTapRef.current = 0
-    ignoreNativeDoubleClickRef.current = true
-    event.preventDefault()
-    onOpen()
-    window.setTimeout(() => { ignoreNativeDoubleClickRef.current = false }, TOUCH_DOUBLE_TAP_DELAY)
-  }, [onOpen])
-
-  const handleDoubleClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
-    if (ignoreNativeDoubleClickRef.current) {
-      ignoreNativeDoubleClickRef.current = false
-      event.preventDefault()
-      return
-    }
-    onOpen()
-  }, [onOpen])
-
-  return { handlePointerUp, handleDoubleClick }
-}
-
-function FileCard({ item, thumbnailSource, selected, onSelect, onOpen, draggable, dragging, dropTarget, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }: { item: PathItem; thumbnailSource: string; selected: boolean; onSelect: (event: React.MouseEvent) => void; onOpen: () => void } & DragDropItemProps) {
-  const isDir = isDirectory(item)
-  const mediaKind = previewKind(item)
-  const hasThumbnail = mediaKind === 'image' || mediaKind === 'audio' || mediaKind === 'video'
-  const { handlePointerUp, handleDoubleClick } = useTouchDoubleTapOpen(onOpen)
-  return (
-    <button className={`file-card ${selected ? 'selected' : ''} ${isDir ? 'folder-item' : ''} ${dragging ? 'is-dragging' : ''} ${dropTarget ? 'drop-target' : ''}`} data-item-name={item.name} type="button" draggable={draggable} onClick={onSelect} onPointerUp={handlePointerUp} onDoubleClick={handleDoubleClick} onDragStart={(event) => onDragStart(item, event)} onDragEnd={onDragEnd} onDragOver={(event) => onDragOver(item, event)} onDragLeave={(event) => onDragLeave(item, event)} onDrop={(event) => onDrop(item, event)}>
-      <span className="selection-indicator" aria-hidden="true">{selected ? <Check size={11} strokeWidth={3} /> : null}</span>
-      <span className={`card-thumb ${hasThumbnail ? 'media-thumb' : ''}`}>
-        <EntryIcon item={item} size={36} />
-        {mediaKind === 'image' && <img src={thumbnailSource} alt="" loading="lazy" draggable={false} onLoad={(event) => event.currentTarget.classList.add('is-ready')} onError={(event) => { event.currentTarget.style.display = 'none' }} />}
-        {mediaKind === 'audio' && <AudioCoverThumbnail source={thumbnailSource} />}
-        {mediaKind === 'video' && <video src={`${thumbnailSource}#t=0.1`} muted playsInline preload="metadata" aria-hidden="true" onLoadedMetadata={(event) => {
-          const video = event.currentTarget
-          if (Number.isFinite(video.duration) && video.duration > 0) video.currentTime = Math.min(0.1, video.duration / 2)
-        }} onLoadedData={(event) => event.currentTarget.classList.add('is-ready')} onSeeked={(event) => event.currentTarget.classList.add('is-ready')} onError={(event) => { event.currentTarget.style.display = 'none' }} />}
-      </span>
-      <span className="card-label">{item.name}</span>
-      <span className="card-meta">{isDir ? 'Folder' : formatBytes(item.size)}</span>
-    </button>
-  )
-}
-
-function AudioCoverThumbnail({ source }: { source: string }) {
-  const containerRef = useRef<HTMLSpanElement>(null)
-  const [isVisible, setIsVisible] = useState(false)
-  const [coverUrl, setCoverUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return undefined
-    if (!('IntersectionObserver' in window)) {
-      setIsVisible(true)
-      return undefined
-    }
-
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry?.isIntersecting) return
-      setIsVisible(true)
-      observer.disconnect()
-    }, { rootMargin: '160px' })
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
-
-  useEffect(() => {
-    if (!isVisible) return undefined
-
-    let active = true
-    let objectUrl: string | null = null
-    setCoverUrl(null)
-
-    void readAudioCover(source).then((cover) => {
-      if (!cover) return
-      const url = URL.createObjectURL(cover)
-      if (active) {
-        objectUrl = url
-        setCoverUrl(url)
-      } else {
-        URL.revokeObjectURL(url)
-      }
-    })
-
-    return () => {
-      active = false
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [isVisible, source])
-
-  return <span className="audio-cover-thumbnail" ref={containerRef}>{coverUrl && <img src={coverUrl} alt="" draggable={false} onLoad={(event) => event.currentTarget.classList.add('is-ready')} onError={(event) => { event.currentTarget.style.display = 'none' }} />}</span>
-}
-
-async function readAudioCover(source: string): Promise<Blob | null> {
-  const embeddedCover = await new Promise<Blob | null>((resolve) => {
-    let complete = false
-    const finish = (cover: Blob | null) => {
-      if (complete) return
-      complete = true
-      window.clearTimeout(timeout)
-      resolve(cover)
-    }
-    const timeout = window.setTimeout(() => finish(null), 2500)
-
-    void import('jsmediatags/dist/jsmediatags.min.js').then(({ default: jsmediatags }) => {
-      new jsmediatags.Reader(source).setTagsToRead(['picture']).read({
-        onSuccess: ({ tags }) => {
-          const picture = tags.picture
-          finish(picture?.data.length ? new Blob([Uint8Array.from(picture.data)], { type: picture.format || 'image/jpeg' }) : null)
-        },
-        onError: () => finish(null),
-      })
-    }).catch(() => finish(null))
-  })
-  if (embeddedCover || !/\.flac(?:$|[?#])/i.test(source)) return embeddedCover
-  return readFlacCover(source)
-}
-
-async function readFlacCover(source: string): Promise<Blob | null> {
-  const readRange = async (start: number, length: number) => {
-    const response = await fetch(source, {
-      headers: { Range: `bytes=${start}-${start + length - 1}` },
-      credentials: 'same-origin',
-    })
-    if (!response.ok) return null
-    return new Uint8Array(await response.arrayBuffer())
-  }
-
-  try {
-    const signature = await readRange(0, 4)
-    if (!signature || new TextDecoder().decode(signature) !== 'fLaC') return null
-
-    let offset = 4
-    for (let blockCount = 0; blockCount < 64; blockCount += 1) {
-      const header = await readRange(offset, 4)
-      if (!header || header.length < 4) return null
-      const isLast = (header[0] & 0x80) !== 0
-      const type = header[0] & 0x7f
-      const length = (header[1] << 16) | (header[2] << 8) | header[3]
-      if (type === 6) {
-        const picture = await readRange(offset + 4, length)
-        return picture ? parseFlacCover(picture) : null
-      }
-      if (isLast) return null
-      offset += length + 4
-    }
-  } catch {
-    return null
-  }
-  return null
-}
-
-function parseFlacCover(bytes: Uint8Array): Blob | null {
-  const uint32 = (offset: number) => (bytes[offset] * 0x1000000) + ((bytes[offset + 1] ?? 0) << 16) + ((bytes[offset + 2] ?? 0) << 8) + (bytes[offset + 3] ?? 0)
-  if (bytes.length < 36) return null
-
-  let offset = 4
-  const mimeLength = uint32(offset)
-  offset += 4 + mimeLength
-  const descriptionLength = uint32(offset)
-  offset += 4 + descriptionLength + 16
-  const dataLength = uint32(offset)
-  offset += 4
-  if (offset + dataLength > bytes.length) return null
-
-  const mime = new TextDecoder().decode(bytes.slice(8, 8 + mimeLength)) || 'image/jpeg'
-  return new Blob([bytes.slice(offset, offset + dataLength)], { type: mime })
-}
-
-function FileRow({ item, selected, onSelect, onOpen, onMenu, draggable, dragging, dropTarget, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }: { item: PathItem; selected: boolean; onSelect: (event: React.MouseEvent) => void; onOpen: () => void; onMenu: (item: PathItem, anchor: HTMLButtonElement) => void } & DragDropItemProps) {
-  const isDir = isDirectory(item)
-  const { handlePointerUp, handleDoubleClick } = useTouchDoubleTapOpen(onOpen)
-  const isRowAction = (event: React.SyntheticEvent<HTMLElement>) => Boolean((event.target as HTMLElement).closest('.row-more'))
-  return (
-    <div className={`file-row ${selected ? 'selected' : ''} ${dragging ? 'is-dragging' : ''} ${dropTarget ? 'drop-target' : ''}`} data-item-name={item.name} role="row" tabIndex={0} draggable={draggable} onClick={onSelect} onPointerUp={(event) => { if (!isRowAction(event)) handlePointerUp(event) }} onDoubleClick={(event) => { if (!isRowAction(event)) handleDoubleClick(event) }} onDragStart={(event) => onDragStart(item, event)} onDragEnd={onDragEnd} onDragOver={(event) => onDragOver(item, event)} onDragLeave={(event) => onDragLeave(item, event)} onDrop={(event) => onDrop(item, event)} onKeyDown={(event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault()
-        onSelect(event as unknown as React.MouseEvent)
-      }
-    }}>
-      <span className="name-cell">
-        <span className="selection-indicator" aria-hidden="true">{selected ? <Check size={11} strokeWidth={3} /> : null}</span>
-        <span className={`file-icon ${isDir ? 'folder' : ''}`}><EntryIcon item={item} size={18} /></span>
-        <strong>{item.name}</strong>
-      </span>
-      <span>{formatDate(item.mtime)}</span>
-      <span>{isDir ? 'Folder' : formatBytes(item.size)}</span>
-      <button className="row-more" type="button" title={`Actions for ${item.name}`} aria-label={`Actions for ${item.name}`} aria-haspopup="menu" onClick={(event) => { event.stopPropagation(); onMenu(item, event.currentTarget) }}><MoreHorizontal size={18} /></button>
-    </div>
-  )
-}
-
-function UploadQueue({ tasks, pinned }: { tasks: UploadTask[]; pinned: boolean }) {
-  return (
-    <section className="upload-queue-popover" aria-label="Upload progress">
-      <header className="upload-queue-heading"><strong>Uploads</strong><span>{pinned ? 'Pinned' : tasks.some((task) => task.status === 'uploading') ? 'In progress' : `${tasks.length} items`}</span></header>
-      {tasks.length ? (
-        <div className="upload-task-list">
-          {tasks.slice(-8).reverse().map((task) => (
-            <div className={`upload-task ${task.status}`} key={task.id} title={task.error}>
-              <span className="upload-task-icon" aria-hidden="true">{task.status === 'complete' ? <Check size={14} strokeWidth={2.5} /> : task.status === 'error' ? <X size={14} strokeWidth={2.5} /> : task.status === 'uploading' ? <LoaderCircle size={14} className="spin" /> : <Upload size={14} />}</span>
-              <div className="upload-task-details"><div><strong title={task.name}>{task.name}</strong><span>{task.status === 'complete' ? 'Complete' : task.status === 'error' ? 'Failed' : task.status === 'uploading' ? 'Uploading' : 'Queued'}</span></div><span className="upload-progress-track"><span style={{ width: `${task.progress}%` }} /></span></div>
-            </div>
-          ))}
-        </div>
-      ) : <p className="upload-queue-empty">No uploads yet</p>}
-    </section>
-  )
-}
-
-function FormDialogView({ dialog, onClose }: { dialog: FormDialog; onClose: () => void }) {
-  const [value, setValue] = useState(dialog.initialValue)
-  const [submitting, setSubmitting] = useState(false)
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault()
-    const trimmed = value.trim().replace(/^\/+|\/+$/g, '')
-    if (!trimmed || trimmed.includes('..')) return
-    setSubmitting(true)
-    await dialog.onSubmit(trimmed)
-    setSubmitting(false)
-    onClose()
-  }
-  return (
-    <div className="modal-backdrop" role="presentation">
-      <form className="form-modal" onSubmit={(event) => void submit(event)}>
-        <div className="modal-heading">
-          <div>
-            <p className="eyebrow">File operation</p>
-            <h2>{dialog.title}</h2>
-          </div>
-          <button className="icon-button subtle" type="button" onClick={onClose} title="Close"><X size={17} /></button>
-        </div>
-        <label>{dialog.label}<input autoFocus value={value} onChange={(event) => setValue(event.target.value)} /></label>
-        <div className="modal-actions">
-          <button className="action-button" type="button" onClick={onClose}>Cancel</button>
-          <button className="primary-button" disabled={!value.trim() || submitting} type="submit">{submitting && <LoaderCircle size={15} className="spin" />}{dialog.submitLabel}</button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-function EditorView({ editor, onChange, onClose, onSave }: { editor: { item: PathItem; content: string }; onChange: (content: string) => void; onClose: () => void; onSave: () => void }) {
-  return (
-    <div className="modal-backdrop editor-backdrop" role="presentation">
-      <section className="editor-modal">
-        <div className="modal-heading">
-          <div>
-            <p className="eyebrow">Text editor</p>
-            <h2>{editor.item.name}</h2>
-          </div>
-          <div className="editor-actions">
-            <button className="action-button" type="button" onClick={onClose}>Cancel</button>
-            <button className="primary-button" type="button" onClick={onSave}><Pencil size={15} /> Save changes</button>
-          </div>
-        </div>
-        <textarea value={editor.content} onChange={(event) => onChange(event.target.value)} spellCheck="false" />
-      </section>
-    </div>
-  )
-}
-
-function MediaPreviewView({ item, source, onClose }: { item: PathItem; source: string; onClose: () => void }) {
-  const initialKind = previewKind(item)
-  const [kind, setKind] = useState<PreviewKind>(initialKind ?? 'image')
-
-  useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [onClose])
-
-  useEffect(() => {
-    if (!initialKind) return undefined
-    setKind(initialKind)
-    if (!/\.webm$/i.test(item.name)) return undefined
-
-    let active = true
-    void fetch(source, { method: 'HEAD', credentials: 'same-origin' })
-      .then((response) => response.headers.get('content-type')?.toLowerCase() ?? '')
-      .then((contentType) => {
-        if (!active) return
-        if (contentType.startsWith('audio/')) setKind('audio')
-        if (contentType.startsWith('video/')) setKind('video')
-      })
-      .catch(() => undefined)
-    return () => { active = false }
-  }, [initialKind, item.name, source])
-
-  if (!initialKind) return null
-
-  return (
-    <div className="modal-backdrop media-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-      <section className={`media-preview-modal ${kind}-preview`} role="dialog" aria-modal="true" aria-label={`Preview ${item.name}`}>
-        <header className="media-preview-heading">
-          <div className="media-preview-title">
-            <span className="media-preview-icon"><EntryIcon item={item} size={19} /></span>
-            <div><p className="eyebrow">{kind} preview</p><h2 title={item.name}>{item.name}</h2></div>
-          </div>
-          <div className="media-preview-actions">
-            <a className="icon-button subtle" href={source} download={item.name} title="Download" aria-label={`Download ${item.name}`}><Download size={17} /></a>
-            <button className="icon-button subtle" type="button" onClick={onClose} title="Close preview" aria-label="Close preview"><X size={18} /></button>
-          </div>
-        </header>
-        <div className="media-preview-stage">
-          {kind === 'image' && <img src={source} alt={item.name} />}
-          {kind === 'audio' && <div className="audio-preview-player"><span className="audio-preview-icon"><FileAudio size={44} /></span><strong>{item.name}</strong><audio controls src={source}>Your browser cannot play this audio file.</audio></div>}
-          {kind === 'video' && <video controls src={source}>Your browser cannot play this video file.</video>}
-        </div>
-        <footer className="media-preview-footer"><span>{extension(item.name)} file</span><span>{formatBytes(item.size)}</span></footer>
-      </section>
-    </div>
   )
 }
 
