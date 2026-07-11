@@ -30,13 +30,14 @@ import { EditorDialog } from './components/dialogs/EditorDialog'
 import { FormDialog } from './components/dialogs/FormDialog'
 import { EntryIcon, FileCard, FileRow } from './components/files/FileItems'
 import { MediaPreview } from './components/previews/MediaPreview'
+import { TextPreview } from './components/previews/TextPreview'
 import { UploadQueue } from './components/upload/UploadQueue'
 import { useDirectory } from './hooks/useDirectory'
 import { useDragAndDrop } from './hooks/useDragAndDrop'
 import { useSelection } from './hooks/useSelection'
 import { useFileOperations } from './hooks/useFileOperations'
 import { useUploads } from './hooks/useUploads'
-import { extension, formatBytes, formatDate, isDirectory, previewKind } from './lib/files'
+import { extension, formatBytes, formatDate, isDirectory, previewKind, textPreviewKind } from './lib/files'
 import { joinPath, parentPath } from './lib/paths'
 import type { DirectoryData, PathItem, RowActionMenu, Theme, Toast, ViewMode } from './types'
 import './App.css'
@@ -66,6 +67,7 @@ function App() {
   const [collapsedBreadcrumbs, setCollapsedBreadcrumbs] = useState(0)
   const [toast, setToast] = useState<Toast | null>(null)
   const [rowActionMenu, setRowActionMenu] = useState<RowActionMenu | null>(null)
+  const [textPreview, setTextPreview] = useState<PathItem | null>(null)
   const [uploadQueueOpen, setUploadQueueOpen] = useState(false)
   const [uploadQueuePinned, setUploadQueuePinned] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -269,10 +271,16 @@ function App() {
     clearDragState()
   }, [clearDragState, directory])
 
+  const hasPreview = (item: PathItem) => Boolean(previewKind(item) || textPreviewKind(item))
+  const openPreview = (item: PathItem) => {
+    if (previewKind(item)) setPreview(item)
+    else if (textPreviewKind(item)) setTextPreview(item)
+  }
+
   const openRowActionMenu = (item: PathItem, anchor: HTMLButtonElement) => {
     const rect = anchor.getBoundingClientRect()
     const menuWidth = 196
-    const menuHeight = (isDirectory(item) ? 164 : 200) + (previewKind(item) ? 36 : 0)
+    const menuHeight = (isDirectory(item) ? 164 : 200) + (hasPreview(item) ? 36 : 0)
     const spaceBelow = window.innerHeight - rect.bottom
     const top = spaceBelow >= menuHeight + 12
       ? rect.bottom + 6
@@ -473,7 +481,7 @@ function App() {
                 <span>Type</span><strong>{selected.path_type.replace('Symlink', 'Linked ')}</strong>
               </div>
               <div className="details-actions">
-                {previewKind(selected) && <button className="action-button" type="button" onClick={() => setPreview(selected)}><Eye size={15} /> Preview</button>}
+                {hasPreview(selected) && <button className="action-button" type="button" onClick={() => openPreview(selected)}><Eye size={15} /> Preview</button>}
                 <button className="primary-button" type="button" onClick={() => download(selected)} disabled={isDirectory(selected) && !data?.allow_archive}><Download size={15} /> Download</button>
                 {!isDirectory(selected) && <button className="action-button" type="button" onClick={() => void openEditor(selected)} disabled={!canWrite}><Pencil size={15} /> Edit</button>}
                 <button className="action-button" type="button" onClick={() => renameItem(selected)} disabled={!canWrite || !canDelete}><Pencil size={15} /> Rename</button>
@@ -501,7 +509,7 @@ function App() {
       {busy && <div className="activity-pill"><LoaderCircle size={15} className="spin" /> {busy === 'upload' ? 'Uploading files' : 'Working'}</div>}
       {rowActionMenu && (
         <div ref={rowActionMenuRef} className="row-actions-menu" style={{ top: rowActionMenu.top, left: rowActionMenu.left }} role="menu" aria-label={`${rowActionMenu.item.name} actions`}>
-          {previewKind(rowActionMenu.item) && <button type="button" role="menuitem" onClick={() => { setPreview(rowActionMenu.item); setRowActionMenu(null) }}><Eye size={16} /> Preview</button>}
+          {hasPreview(rowActionMenu.item) && <button type="button" role="menuitem" onClick={() => { openPreview(rowActionMenu.item); setRowActionMenu(null) }}><Eye size={16} /> Preview</button>}
           <button type="button" role="menuitem" onClick={() => {
             if (selectedItems.length > 1 && selectedNames.has(rowActionMenu.item.name)) void downloadSelection()
             else download(rowActionMenu.item)
@@ -522,6 +530,7 @@ function App() {
       {dialog && <FormDialog dialog={dialog} onClose={() => setDialog(null)} />}
       {editor && <EditorDialog editor={editor} onChange={(content) => setEditor({ ...editor, content })} onClose={() => setEditor(null)} onSave={() => void saveEditor()} />}
       {preview && <MediaPreview item={preview} source={endpoint(joinPath(directory, preview.name)).toString()} onClose={() => setPreview(null)} />}
+      {textPreview && <TextPreview item={textPreview} source={endpoint(joinPath(directory, textPreview.name)).toString()} onClose={() => setTextPreview(null)} />}
     </main>
   )
 }

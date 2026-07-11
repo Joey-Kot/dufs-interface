@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import jsmediatags from 'jsmediatags/dist/jsmediatags.min.js'
 import { Check, File, FileAudio, FileCode2, FileImage, FileText, FileVideo, Folder, MoreHorizontal } from 'lucide-react'
 import { AUDIO_FILE, BINARY_FILE, formatBytes, formatDate, IMAGE_FILE, IMAGE_THUMBNAIL_MAX_BYTES, isDirectory, previewKind, VIDEO_FILE } from '../../lib/files'
 import type { PathItem } from '../../types'
@@ -142,7 +143,7 @@ async function readAudioCover(source: string): Promise<Blob | null> {
     }
     const timeout = window.setTimeout(() => finish(null), 2500)
 
-    void import('jsmediatags/dist/jsmediatags.min.js').then(({ default: jsmediatags }) => {
+    try {
       new jsmediatags.Reader(source).setTagsToRead(['picture']).read({
         onSuccess: ({ tags }) => {
           const picture = tags.picture
@@ -150,7 +151,9 @@ async function readAudioCover(source: string): Promise<Blob | null> {
         },
         onError: () => finish(null),
       })
-    }).catch(() => finish(null))
+    } catch {
+      finish(null)
+    }
   })
   if (embeddedCover || !/\.flac(?:$|[?#])/i.test(source)) return embeddedCover
   return readFlacCover(source)

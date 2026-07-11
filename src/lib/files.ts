@@ -5,6 +5,9 @@ export const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|tiff?)$/i
 export const IMAGE_THUMBNAIL_MAX_BYTES = 15 * 1024 * 1024
 export const AUDIO_FILE = /\.(?:mp3|ogg|opus|flac|m4a|aac|wav)$/i
 export const VIDEO_FILE = /\.(?:mp4|mkv|webm|mov)$/i
+export const MARKDOWN_FILE = /\.(?:md|markdown|mdx)$/i
+export const TEXT_PREVIEW_MAX_BYTES = 2 * 1024 * 1024
+export const TEXT_FILE = /(?:\.(?:txt|text|log|csv|tsv|jsonc?|ya?ml|toml|ini|conf|cfg|properties|env|xml|html?|css|scss|sass|less|js|jsx|mjs|cjs|ts|tsx|vue|svelte|astro|py|rb|php|java|kt|kts|c|h|cc|cp|cpp|cxx|hpp|cs|go|rs|swift|sh|bash|zsh|fish|ps1|sql|r|lua|pl|pm|ex|exs|erl|hrl|fs|fsx|clj|cljs|groovy|gradle|rst|adoc|org|dockerfile)|^(?:dockerfile|makefile|justfile|rakefile|gemfile|procfile|license|readme)|^\.(?:env(?:\..*)?|gitignore|gitattributes|editorconfig|npmrc|prettierrc|eslintignore))$/i
 
 export function isDirectory(item: PathItem) {
   return item.path_type.endsWith('Dir')
@@ -20,6 +23,13 @@ export function previewKind(item: PathItem): PreviewKind | null {
   if (IMAGE_FILE.test(item.name)) return 'image'
   if (AUDIO_FILE.test(item.name)) return 'audio'
   if (VIDEO_FILE.test(item.name)) return 'video'
+  return null
+}
+
+export function textPreviewKind(item: PathItem): 'markdown' | 'text' | null {
+  if (isDirectory(item)) return null
+  if (MARKDOWN_FILE.test(item.name)) return 'markdown'
+  if (TEXT_FILE.test(item.name)) return 'text'
   return null
 }
 

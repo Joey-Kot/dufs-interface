@@ -294,6 +294,29 @@
 :root[data-theme='dark'] .audio-preview .media-preview-stage { background: #121a25; }
 :root[data-theme='dark'] .audio-preview .media-preview-icon, :root[data-theme='dark'] .audio-preview-icon { color: #bd91e0; background: #2b2038; }
 :root[data-theme='dark'] .video-preview .media-preview-icon { color: #e78593; background: #35202a; }
+.text-preview-stage { min-height: 180px; flex: 1 1 auto; overflow: auto; padding: 24px; color: var(--ink); background: var(--surface-hover); }
+.text-preview-stage > pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.text-preview-stage pre, .text-preview-stage code { font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace; font-size: 12px; line-height: 1.6; }
+.text-preview-state { min-height: 180px; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: 13px; }
+.text-preview-error { color: var(--danger); }
+.text-preview-truncation { margin: 0 0 16px; padding: 9px 11px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 12px; }
+.markdown-preview { font-size: 14px; line-height: 1.65; }
+.markdown-preview > :first-child { margin-top: 0; }
+.markdown-preview > :last-child { margin-bottom: 0; }
+.markdown-preview h1, .markdown-preview h2, .markdown-preview h3, .markdown-preview h4 { margin: 1.35em 0 .55em; line-height: 1.25; }
+.markdown-preview h1 { font-size: 1.8em; }
+.markdown-preview h2 { padding-bottom: .3em; font-size: 1.45em; border-bottom: 1px solid var(--line); }
+.markdown-preview h3 { font-size: 1.2em; }
+.markdown-preview p, .markdown-preview ul, .markdown-preview ol { margin: 0 0 1em; }
+.markdown-preview ul, .markdown-preview ol { padding-left: 1.6em; }
+.markdown-preview li + li { margin-top: .28em; }
+.markdown-preview a { color: var(--accent); }
+.markdown-preview blockquote { margin: 1em 0; padding: .15em 1em; color: var(--muted); border-left: 3px solid var(--line); }
+.markdown-preview pre { overflow: auto; margin: 1em 0; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.markdown-preview :not(pre) > code { padding: .12em .35em; background: var(--surface); border-radius: 4px; }
+.markdown-preview table { width: 100%; margin: 1em 0; border-collapse: collapse; }
+.markdown-preview th, .markdown-preview td { padding: 7px 9px; border: 1px solid var(--line); text-align: left; }
+.markdown-preview th { background: var(--surface); }
 
 /* ===== Utility ===== */
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -367,6 +390,7 @@
   .media-preview-heading { min-height: 60px; padding: 10px 10px 10px 14px; }
   .media-preview-stage { min-height: 160px; padding: 14px; }
   .media-preview-stage img, .media-preview-stage video { max-height: calc(100vh - 158px); }
+  .text-preview-stage { min-height: 160px; padding: 14px; }
   .audio-preview .media-preview-stage { padding: 18px 14px; }
   .audio-preview-player { padding: 22px 16px; }
   .media-preview-footer { min-height: 34px; padding: 0 14px; }
