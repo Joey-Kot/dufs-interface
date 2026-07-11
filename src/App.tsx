@@ -236,7 +236,8 @@ function App() {
   const canDelete = Boolean(data?.allow_delete)
   const canMove = canWrite && canDelete
 
-  const { handleFileDragOver, handleFileDrop, selectFolderForUpload, uploadFiles, uploadFolderFiles, uploadTasks } = useUploads({
+  const { cancelUpload, handleFileDragOver, handleFileDrop, selectFolderForUpload, uploadFiles, uploadFolderFiles, uploadTasks } = useUploads({
+    allowDelete: data?.allow_delete,
     allowUpload: data?.allow_upload,
     directory,
     endpoint,
@@ -439,7 +440,7 @@ function App() {
         <div className="content-controls">
           <div className="upload-queue-control" onMouseEnter={() => setUploadQueueOpen(true)} onMouseLeave={() => { if (!uploadQueuePinned) setUploadQueueOpen(false) }}>
             <button className={`icon-button upload-queue-toggle ${uploadQueuePinned ? 'active' : ''}`} type="button" title={uploadQueuePinned ? 'Unpin upload progress' : 'Show upload progress'} aria-label="Upload progress" aria-expanded={uploadQueueOpen} onClick={toggleUploadQueue}><Upload size={17} /></button>
-            {uploadQueueOpen && <UploadQueue tasks={uploadTasks} pinned={uploadQueuePinned} />}
+            {uploadQueueOpen && <UploadQueue tasks={uploadTasks} pinned={uploadQueuePinned} onCancel={cancelUpload} />}
           </div>
           <div className="view-controls" aria-label="View mode">
             <button className={selectionMode ? 'active' : ''} type="button" title={selectionMode ? 'Finish multi-select' : 'Select multiple items'} onClick={() => setSelectionMode(!selectionMode)}><ListChecks size={17} /></button>

@@ -1,11 +1,12 @@
-import { useState } from 'react'
-import { directoryPath, joinPath } from '../lib/paths'
+import { useEffect, useRef, useState } from 'react'
+import { directoryPath, joinPath, parentPath } from '../lib/paths'
 import type { DirectoryPickerHandle, DirectoryPickerWindow, DroppedDirectoryEntry, DroppedEntry, DroppedFileEntry, DroppedItem, Toast, UploadEntry, UploadTask } from '../types'
 
 type Endpoint = (path: string, query?: Record<string, string>) => URL
 type RunOperation = (label: string, operation: () => Promise<void>, message: string) => Promise<void>
 
 interface UseUploadsOptions {
+  allowDelete: boolean | undefined
   allowUpload: boolean | undefined
   directory: string
   endpoint: Endpoint
@@ -14,17 +15,73 @@ interface UseUploadsOptions {
   run: RunOperation
 }
 
-export function useUploads({ allowUpload, directory, endpoint, assertOk, notify, run }: UseUploadsOptions) {
+export function useUploads({ allowDelete, allowUpload, directory, endpoint, assertOk, notify, run }: UseUploadsOptions) {
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([])
+  const uploadControllers = useRef(new Map<string, AbortController>())
+  const cancelledTaskIds = useRef(new Set<string>())
+
+  useEffect(() => () => {
+    uploadControllers.current.forEach((controller) => controller.abort())
+  }, [])
 
   const updateUploadTask = (id: string, update: Partial<UploadTask>) => {
     setUploadTasks((tasks) => tasks.map((task) => task.id === id ? { ...task, ...update } : task))
   }
 
+  const temporaryUploadPath = (path: string) => {
+    const id = crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    return joinPath(parentPath(path), `.dufs-upload-${id}.part`)
+  }
+
+  const removeTemporaryUpload = async (path: string) => {
+    try {
+      const response = await fetch(endpoint(path), { method: 'DELETE', credentials: 'same-origin' })
+      if (!response.ok && response.status !== 404) await assertOk(response)
+    } catch (removeError) {
+      notify(removeError instanceof Error ? `Upload canceled, but the temporary file could not be removed: ${removeError.message}` : 'Upload canceled, but the temporary file could not be removed.', 'error')
+    }
+  }
+
   const uploadFile = async (file: File, path: string, taskId: string) => {
-    const response = await fetch(endpoint(path), { method: 'PUT', body: file, credentials: 'same-origin' })
-    await assertOk(response)
-    updateUploadTask(taskId, { progress: 100, status: 'complete' })
+    if (cancelledTaskIds.current.has(taskId)) return
+    const temporaryPath = allowDelete ? temporaryUploadPath(path) : path
+    const controller = new AbortController()
+    uploadControllers.current.set(taskId, controller)
+    try {
+      const response = await fetch(endpoint(temporaryPath), { method: 'PUT', body: file, credentials: 'same-origin', signal: controller.signal })
+      if (cancelledTaskIds.current.has(taskId)) {
+        if (allowDelete) await removeTemporaryUpload(temporaryPath)
+        return
+      }
+      await assertOk(response)
+      if (cancelledTaskIds.current.has(taskId)) {
+        if (allowDelete) await removeTemporaryUpload(temporaryPath)
+        return
+      }
+      if (allowDelete) {
+        const moveResponse = await fetch(endpoint(temporaryPath), {
+          method: 'MOVE',
+          headers: { Destination: endpoint(path).toString(), Overwrite: 'T' },
+          credentials: 'same-origin',
+          signal: controller.signal,
+        })
+        await assertOk(moveResponse)
+      }
+      if (!cancelledTaskIds.current.has(taskId)) updateUploadTask(taskId, { progress: 100, status: 'complete' })
+    } catch (uploadError) {
+      if (allowDelete) await removeTemporaryUpload(temporaryPath)
+      if (!cancelledTaskIds.current.has(taskId)) throw uploadError
+      if (!allowDelete) notify('Upload canceled, but this server does not allow deletion, so the incomplete file may remain.', 'error')
+    } finally {
+      uploadControllers.current.delete(taskId)
+    }
+  }
+
+  const cancelUpload = (taskId: string) => {
+    cancelledTaskIds.current.add(taskId)
+    uploadControllers.current.get(taskId)?.abort()
+    uploadControllers.current.delete(taskId)
+    setUploadTasks((tasks) => tasks.filter((task) => task.id !== taskId))
   }
 
   const uploadEntries = async (entries: UploadEntry[], directories: string[] = []) => {
@@ -45,6 +102,7 @@ export function useUploads({ allowUpload, directory, endpoint, assertOk, notify,
         }
 
         for (const [index, entry] of entries.entries()) {
+          if (cancelledTaskIds.current.has(tasks[index].id)) continue
           updateUploadTask(tasks[index].id, { status: 'uploading' })
           await uploadFile(entry.file, joinPath(directory, entry.relativePath), tasks[index].id)
         }
@@ -180,5 +238,5 @@ export function useUploads({ allowUpload, directory, endpoint, assertOk, notify,
     void uploadDroppedItems(event.dataTransfer)
   }
 
-  return { handleFileDragOver, handleFileDrop, selectFolderForUpload, uploadFiles, uploadFolderFiles, uploadTasks }
+  return { cancelUpload, handleFileDragOver, handleFileDrop, selectFolderForUpload, uploadFiles, uploadFolderFiles, uploadTasks }
 }

@@ -133,6 +133,9 @@
 .upload-task.complete .upload-task-icon { color: #24855c; background: #e7f6ed; }
 .upload-task.error .upload-task-icon { color: var(--danger); background: var(--danger-soft); }
 .upload-task-details { min-width: 0; flex: 1; display: grid; gap: 6px; }
+.upload-task-cancel { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; padding: 0; color: var(--muted); background: transparent; border: 0; border-radius: 50%; cursor: pointer; transition: var(--transition); }
+.upload-task-cancel:hover { color: var(--danger); background: var(--danger-soft); }
+.upload-task-cancel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .upload-task-details > div { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .upload-task-details strong { min-width: 0; overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .upload-task-details > div > span { flex: 0 0 auto; color: var(--muted); font-size: 10px; font-weight: 600; }
