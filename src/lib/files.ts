@@ -2,6 +2,7 @@ import type { PathItem, PreviewKind } from '../types'
 
 export const BINARY_FILE = /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|tiff?|psd|eps|pdf|docx?|xlsx?|pptx?|key|numbers|pages|zip|tar|gz|bz2|7z|rar|zst|xz|iso|bin|exe|dll|so|dylib|elf|wasm|o|a|lib|obj|pyc|class|jar|war|ear|dex|apk|aab|ttf|otf|woff2?|eot|mp[34]|avi|mkv|mov|wmv|flv|webm|og[gv]|wav|flac|aac|m4a|opus|ogg|mka|swf|dat|db|sqlite|s3db|mdb|gzip?)$/i
 export const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|tiff?)$/i
+export const IMAGE_THUMBNAIL_MAX_BYTES = 15 * 1024 * 1024
 export const AUDIO_FILE = /\.(?:mp3|ogg|opus|flac|m4a|aac|wav)$/i
 export const VIDEO_FILE = /\.(?:mp4|mkv|webm|mov)$/i
 

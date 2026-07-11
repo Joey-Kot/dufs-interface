@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, File, FileAudio, FileCode2, FileImage, FileText, FileVideo, Folder, MoreHorizontal } from 'lucide-react'
-import { AUDIO_FILE, BINARY_FILE, formatBytes, formatDate, IMAGE_FILE, isDirectory, previewKind, VIDEO_FILE } from '../../lib/files'
+import { AUDIO_FILE, BINARY_FILE, formatBytes, formatDate, IMAGE_FILE, IMAGE_THUMBNAIL_MAX_BYTES, isDirectory, previewKind, VIDEO_FILE } from '../../lib/files'
 import type { PathItem } from '../../types'
 
 const TOUCH_DOUBLE_TAP_DELAY = 350
@@ -61,14 +61,15 @@ function useTouchDoubleTapOpen(onOpen: () => void) {
 export function FileCard({ item, thumbnailSource, selected, onSelect, onOpen, draggable, dragging, dropTarget, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }: { item: PathItem; thumbnailSource: string; selected: boolean; onSelect: (event: React.MouseEvent) => void; onOpen: () => void } & DragDropItemProps) {
   const isDir = isDirectory(item)
   const mediaKind = previewKind(item)
-  const hasThumbnail = mediaKind === 'image' || mediaKind === 'audio' || mediaKind === 'video'
+  const showImageThumbnail = mediaKind === 'image' && item.size <= IMAGE_THUMBNAIL_MAX_BYTES
+  const hasThumbnail = showImageThumbnail || mediaKind === 'audio' || mediaKind === 'video'
   const { handlePointerUp, handleDoubleClick } = useTouchDoubleTapOpen(onOpen)
   return (
     <button className={`file-card ${selected ? 'selected' : ''} ${isDir ? 'folder-item' : ''} ${dragging ? 'is-dragging' : ''} ${dropTarget ? 'drop-target' : ''}`} data-item-name={item.name} type="button" draggable={draggable} onClick={onSelect} onPointerUp={handlePointerUp} onDoubleClick={handleDoubleClick} onDragStart={(event) => onDragStart(item, event)} onDragEnd={onDragEnd} onDragOver={(event) => onDragOver(item, event)} onDragLeave={(event) => onDragLeave(item, event)} onDrop={(event) => onDrop(item, event)}>
       <span className="selection-indicator" aria-hidden="true">{selected ? <Check size={11} strokeWidth={3} /> : null}</span>
       <span className={`card-thumb ${hasThumbnail ? 'media-thumb' : ''}`}>
         <EntryIcon item={item} size={36} />
-        {mediaKind === 'image' && <img src={thumbnailSource} alt="" loading="lazy" draggable={false} onLoad={(event) => event.currentTarget.classList.add('is-ready')} onError={(event) => { event.currentTarget.style.display = 'none' }} />}
+        {showImageThumbnail && <img src={thumbnailSource} alt="" loading="lazy" draggable={false} onLoad={(event) => event.currentTarget.classList.add('is-ready')} onError={(event) => { event.currentTarget.style.display = 'none' }} />}
         {mediaKind === 'audio' && <AudioCoverThumbnail source={thumbnailSource} />}
         {mediaKind === 'video' && <video src={`${thumbnailSource}#t=0.1`} muted playsInline preload="metadata" aria-hidden="true" onLoadedMetadata={(event) => {
           const video = event.currentTarget
