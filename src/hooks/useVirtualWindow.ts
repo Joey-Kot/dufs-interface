@@ -65,11 +65,10 @@ export function useVirtualWindow({ enabled, itemCount, mode, resetKey }: Virtual
   }, [enabled, mode])
 
   useEffect(() => {
-    if (!enabled) return
     const element = scrollRef.current
     if (element) element.scrollTop = 0
     setScrollTop(0)
-  }, [enabled, resetKey])
+  }, [resetKey])
 
   const rowCount = Math.ceil(itemCount / metrics.columns)
   const rowPitch = metrics.rowHeight + metrics.rowGap
