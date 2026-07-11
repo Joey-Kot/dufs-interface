@@ -47,9 +47,21 @@ export interface SelectionBox {
 }
 
 export interface LassoSelection {
+  autoScrollFrame: number | null
+  currentX: number
+  currentY: number
+  itemBounds: Map<string, LassoItemBounds>
   startX: number
+  startContentY: number
   startY: number
   initialNames: Set<string>
+}
+
+export interface LassoItemBounds {
+  bottom: number
+  left: number
+  right: number
+  top: number
 }
 
 export interface DirectoryPickerFileHandle {
