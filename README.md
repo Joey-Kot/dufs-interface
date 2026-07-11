@@ -32,9 +32,16 @@
 ### 媒体预览与响应式界面
 
 - 图片、音频、视频和常见文本文件可在页面内预览；Markdown 支持 GFM 渲染。文本预览最多展示前 2 MiB，超出部分可下载原文件查看。
+- 图片预览支持 10%–1000% 缩放，每次调整 10%；缩放按钮可鼠标或触屏长按连续调整，放大后的图片可在画布内拖拽查看，并支持浏览器原生全屏显示。
 - 音频和视频使用浏览器原生播放控件；`.webm` 会根据响应的 `Content-Type` 区分音频或视频。
 - 顶部导航、文件信息和列表表头保持在工作区内，实际文件列表独立滚动。
 - 小屏幕下工具栏会折叠为菜单，长面包屑自动保留末级路径；详情面板隐藏，行末菜单保留所有操作。
+
+### 字体
+
+- 界面通过 Google Fonts 加载 Rubik、Noto Sans、Noto Sans SC、Ubuntu Sans Mono 和 Noto Sans Mono。
+- 普通文本字体栈为 `Rubik, "Noto Sans", "Noto Sans SC", system-ui, sans-serif`；代码、路径和文本编辑器字体栈为 `"Ubuntu Sans Mono", "Noto Sans Mono", "Cascadia Mono", monospace`。
+- 字体资源无法加载时，浏览器会按字体栈自动降级至本地系统字体。
 
 ## Dufs 接口与权限
 
