@@ -4,11 +4,12 @@ import type { LassoSelection, PathItem, SelectionBox } from '../types'
 const AUTO_SCROLL_EDGE = 52
 const AUTO_SCROLL_MAX_SPEED = 24
 
-export function useSelection(onSelectionStart: () => void) {
+export function useSelection(onSelectionStart: () => void, orderedItemsRef: React.RefObject<PathItem[]>) {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set())
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null)
   const lassoSelectionRef = useRef<LassoSelection | null>(null)
+  const rangeAnchorRef = useRef<string | null>(null)
 
   useEffect(() => () => {
     const lasso = lassoSelectionRef.current
@@ -18,10 +19,26 @@ export function useSelection(onSelectionStart: () => void) {
   const clearSelection = () => {
     setSelectedNames(new Set())
     setSelectionMode(false)
+    rangeAnchorRef.current = null
   }
 
   const selectItem = (item: PathItem, event: React.MouseEvent) => {
     const addToSelection = selectionMode || event.metaKey || event.ctrlKey
+    const rangeAnchor = rangeAnchorRef.current
+    if (event.shiftKey && rangeAnchor) {
+      const anchorIndex = orderedItemsRef.current.findIndex((candidate) => candidate.name === rangeAnchor)
+      const itemIndex = orderedItemsRef.current.findIndex((candidate) => candidate.name === item.name)
+      if (anchorIndex >= 0 && itemIndex >= 0) {
+        const range = orderedItemsRef.current.slice(Math.min(anchorIndex, itemIndex), Math.max(anchorIndex, itemIndex) + 1)
+        setSelectedNames((current) => {
+          const next = addToSelection ? new Set(current) : new Set<string>()
+          for (const candidate of range) next.add(candidate.name)
+          return next
+        })
+        return
+      }
+    }
+
     setSelectedNames((current) => {
       if (!addToSelection) return new Set([item.name])
       const next = new Set(current)
@@ -29,6 +46,7 @@ export function useSelection(onSelectionStart: () => void) {
       else next.add(item.name)
       return next
     })
+    rangeAnchorRef.current = item.name
   }
 
   const updateLassoSelection = (view: HTMLDivElement, lasso: LassoSelection) => {

@@ -80,7 +80,8 @@ function App() {
   const breadcrumbsRef = useRef<HTMLElement>(null)
   const breadcrumbMeasureRef = useRef<HTMLElement>(null)
   const rowActionMenuRef = useRef<HTMLDivElement>(null)
-  const { clearSelection, endItemSelection, selectItem, selectedNames, selectionBox, selectionMode, setSelectedNames, setSelectionMode, startItemSelection, updateItemSelection } = useSelection(() => setRowActionMenu(null))
+  const selectionItemsRef = useRef<PathItem[]>([])
+  const { clearSelection, endItemSelection, selectItem, selectedNames, selectionBox, selectionMode, setSelectedNames, setSelectionMode, startItemSelection, updateItemSelection } = useSelection(() => setRowActionMenu(null), selectionItemsRef)
 
   const endpoint = useCallback((path: string, query?: Record<string, string>) => {
     const url = new URL(serverUrl.trim() || DEFAULT_SERVER, window.location.origin)
@@ -113,6 +114,7 @@ function App() {
     initialDirectory: bootstrap.href || '/',
     onSelectionReset: setSelectedNames,
   })
+  selectionItemsRef.current = items
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
