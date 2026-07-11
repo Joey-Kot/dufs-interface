@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { unzipSync, zipSync } from 'fflate'
-import { BINARY_FILE, hasExtension, isBinaryContent, isDirectory, previewKind } from '../lib/files'
+import { hasExtension, isBinaryContent, isDirectory, isEditableFile, previewKind } from '../lib/files'
 import { directoryPath, joinPath } from '../lib/paths'
 import type { FormDialog, PathItem, Toast } from '../types'
 
@@ -103,7 +103,7 @@ export function useFileOperations({ allowArchive, assertOk, clearSelection, dire
   }
 
   const openEditor = async (item: PathItem) => {
-    if (BINARY_FILE.test(item.name)) {
+    if (!isEditableFile(item)) {
       notify('This file format cannot be edited here.', 'info')
       return
     }

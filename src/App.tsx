@@ -37,7 +37,7 @@ import { useDragAndDrop } from './hooks/useDragAndDrop'
 import { useSelection } from './hooks/useSelection'
 import { useFileOperations } from './hooks/useFileOperations'
 import { useUploads } from './hooks/useUploads'
-import { extension, formatBytes, formatDate, isDirectory, previewKind, textPreviewKind } from './lib/files'
+import { extension, formatBytes, formatDate, isDirectory, isEditableFile, previewKind, textPreviewKind } from './lib/files'
 import { joinPath, parentPath } from './lib/paths'
 import type { DirectoryData, PathItem, RowActionMenu, Theme, Toast, ViewMode } from './types'
 import './App.css'
@@ -484,7 +484,7 @@ function App() {
               <div className="details-actions">
                 {hasPreview(selected) && <button className="action-button" type="button" onClick={() => openPreview(selected)}><Eye size={15} /> Preview</button>}
                 <button className="primary-button" type="button" onClick={() => download(selected)} disabled={isDirectory(selected) && !data?.allow_archive}><Download size={15} /> Download</button>
-                {!isDirectory(selected) && <button className="action-button" type="button" onClick={() => void openEditor(selected)} disabled={!canWrite}><Pencil size={15} /> Edit</button>}
+                {!isDirectory(selected) && <button className="action-button" type="button" onClick={() => void openEditor(selected)} disabled={!canWrite || !isEditableFile(selected)} title={isEditableFile(selected) ? undefined : 'This file format cannot be edited here.'}><Pencil size={15} /> Edit</button>}
                 <button className="action-button" type="button" onClick={() => renameItem(selected)} disabled={!canWrite || !canDelete}><Pencil size={15} /> Rename</button>
                 <button className="action-button" type="button" onClick={() => copyItem(selected)} disabled={!canWrite}><Copy size={15} /> Copy</button>
                 <button className="danger-button" type="button" onClick={() => void deleteItem(selected)} disabled={!canDelete}><Trash2 size={15} /> Delete</button>
@@ -516,7 +516,7 @@ function App() {
             else download(rowActionMenu.item)
             setRowActionMenu(null)
           }} disabled={selectedItems.length > 1 && selectedNames.has(rowActionMenu.item.name) ? !canDownloadSelection : isDirectory(rowActionMenu.item) && !data?.allow_archive}><Download size={16} /> {selectedItems.length > 1 && selectedNames.has(rowActionMenu.item.name) ? 'Download selection' : 'Download'}</button>
-          {!isDirectory(rowActionMenu.item) && <button type="button" role="menuitem" onClick={() => { void openEditor(rowActionMenu.item); setRowActionMenu(null) }} disabled={!canWrite}><Pencil size={16} /> Edit</button>}
+          {!isDirectory(rowActionMenu.item) && <button type="button" role="menuitem" onClick={() => { void openEditor(rowActionMenu.item); setRowActionMenu(null) }} disabled={!canWrite || !isEditableFile(rowActionMenu.item)} title={isEditableFile(rowActionMenu.item) ? undefined : 'This file format cannot be edited here.'}><Pencil size={16} /> Edit</button>}
           <button type="button" role="menuitem" onClick={() => { renameItem(rowActionMenu.item); setRowActionMenu(null) }} disabled={!canWrite || !canDelete}><Pencil size={16} /> Rename</button>
           <button type="button" role="menuitem" onClick={() => { copyItem(rowActionMenu.item); setRowActionMenu(null) }} disabled={!canWrite}><Copy size={16} /> Copy</button>
           <span className="row-actions-menu-divider" />

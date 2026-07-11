@@ -1,6 +1,6 @@
 import type { PathItem, PreviewKind } from '../types'
 
-export const BINARY_FILE = /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|tiff?|psd|eps|pdf|docx?|xlsx?|pptx?|key|numbers|pages|zip|tar|gz|bz2|7z|rar|zst|xz|iso|bin|exe|dll|so|dylib|elf|wasm|o|a|lib|obj|pyc|class|jar|war|ear|dex|apk|aab|ttf|otf|woff2?|eot|mp[34]|avi|mkv|mov|wmv|flv|webm|og[gv]|wav|flac|aac|m4a|opus|ogg|mka|swf|dat|db|sqlite|s3db|mdb|gzip?)$/i
+export const BINARY_FILE = /\.(?:png|jpe?g|gif|webp|avif|bmp|ico|tiff?|heic|heif|psd|eps|ai|raw|dng|cr2|nef|arw|pdf|docx?|docm|dotx|xlsx?|xlsm|xltx|pptx?|pptm|potx|key|numbers|pages|od[stpg]|zip|zipx|tar|tgz|tbz2?|txz|tlz|gz|gzip|bz2|xz|lzma|lz|lz4|lzo|7z|rar|zst|cab|arj|cpio|iso|img|dmg|pkg|deb|rpm|bin|exe|com|msi|msp|appx|msix|dll|so|dylib|elf|wasm|o|a|lib|obj|node|pyc|class|jar|war|ear|dex|apk|aab|ipa|tt[cf]|otf|woff2?|eot|mp[34]|m4[abv]|avi|mkv|mov|wmv|flv|webm|mpeg|mpg|mpe|3g[2p]|ts|mts|m2ts|vob|og[gv]|wav|flac|aac|alac|opus|ogg|mka|aiff?|amr|wma|mid|midi|ape|wv|swf|dat|db|db3|sqlite|s3db|mdb|accdb|parquet|orc|avro|feather|arrow|h5|hdf5|vhdx?|vmdk|vdi|qcow2|ova|pcap|cap|der|p12|pfx)$/i
 export const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|tiff?)$/i
 export const IMAGE_THUMBNAIL_MAX_BYTES = 15 * 1024 * 1024
 export const AUDIO_FILE = /\.(?:mp3|ogg|opus|flac|m4a|aac|wav)$/i
@@ -11,6 +11,10 @@ export const TEXT_FILE = /(?:\.(?:txt|text|log|csv|tsv|jsonc?|ya?ml|toml|ini|con
 
 export function isDirectory(item: PathItem) {
   return item.path_type.endsWith('Dir')
+}
+
+export function isEditableFile(item: PathItem) {
+  return !isDirectory(item) && !BINARY_FILE.test(item.name)
 }
 
 export function hasExtension(name: string) {
