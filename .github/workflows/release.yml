@@ -1,0 +1,68 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: latest-release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Build Latest Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Package release assets
+        run: |
+          mkdir release
+          cd dist
+          zip -r ../release/dufs-interface-assets.zip .
+          cd ../release
+          sha256sum dufs-interface-assets.zip > dufs-interface-assets.zip.sha256
+
+      - name: Remove the previous Latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view Latest; then
+            gh release delete Latest --yes
+          fi
+
+      - name: Move the Latest tag to this build
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git tag --force Latest "$GITHUB_SHA"
+          git push origin refs/tags/Latest --force
+
+      - name: Publish Latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create Latest release/dufs-interface-assets.zip release/dufs-interface-assets.zip.sha256 --title Latest --notes "Automated build from $GITHUB_SHA" --latest
