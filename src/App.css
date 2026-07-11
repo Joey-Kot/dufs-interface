@@ -156,9 +156,11 @@
 .directory-meta > span { color: var(--muted); font-size: 13px; margin-bottom: 2px; }
 
 /* ===== File Grid ===== */
-.file-grid-view { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 24px 20px; }
+.file-grid-view { --virtual-grid-card-height: 170px; --virtual-grid-gap: 10px; --virtual-grid-min-column-width: 155px; --virtual-grid-horizontal-padding: 48px; --virtual-grid-columns: 0; position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 24px 20px; }
 .file-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
-.file-card { position: relative; display: flex; flex-direction: column; padding: 14px 12px; border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; cursor: pointer; color: var(--ink); text-align: left; transition: var(--transition); font-family: inherit; }
+.virtualized-grid { position: relative; display: block; }
+.file-virtual-grid-items { position: absolute; top: 0; left: 0; width: 100%; display: grid; gap: var(--virtual-grid-gap); will-change: transform; }
+.file-card { position: relative; box-sizing: border-box; height: var(--virtual-grid-card-height); display: flex; flex-direction: column; padding: 14px 12px; border-radius: var(--radius-sm); border: 1px solid transparent; background: transparent; cursor: pointer; color: var(--ink); text-align: left; transition: var(--transition); font-family: inherit; }
 .file-card:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 18%, var(--line)); }
 .file-card.selected { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .file-card[draggable='true'] { cursor: default; }
@@ -182,6 +184,8 @@
 
 /* ===== File List ===== */
 .file-list-view { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 12px 12px; }
+.file-list { position: relative; min-height: 100%; }
+.file-virtual-list-items { position: absolute; top: 0; left: 0; width: 100%; will-change: transform; }
 .file-list-header, .file-row { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, .8fr) 90px 30px; align-items: center; gap: 16px; }
 .file-list-header { margin: 0 12px; padding: 0 24px; height: 36px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--line); background: var(--surface); user-select: none; }
 .file-list-header span, .file-row > span { min-width: 0; }
@@ -386,7 +390,7 @@
   .upload-task-list { max-height: min(280px, calc(100dvh - var(--app-header-height) - var(--toolbar-height) - var(--content-header-height) - 92px)); }
   .main-content { padding-bottom: 18px; }
   .details-panel { display: none; }
-  .file-grid-view { padding: 0 16px 16px; }
+  .file-grid-view { --virtual-grid-card-height: 154px; --virtual-grid-gap: 8px; --virtual-grid-horizontal-padding: 32px; --virtual-grid-columns: 2; padding: 0 16px 16px; }
   .file-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .file-card .card-thumb { height: 80px; }
   .file-list-view { padding: 0 16px 16px; }

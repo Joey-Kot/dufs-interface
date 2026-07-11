@@ -38,6 +38,7 @@ import { useDragAndDrop } from './hooks/useDragAndDrop'
 import { useSelection } from './hooks/useSelection'
 import { useFileOperations } from './hooks/useFileOperations'
 import { useUploads } from './hooks/useUploads'
+import { useVirtualWindow } from './hooks/useVirtualWindow'
 import { extension, formatBytes, formatDate, isDirectory, isEditableFile, previewKind, textPreviewKind } from './lib/files'
 import { joinPath, parentPath } from './lib/paths'
 import type { DirectoryData, PathItem, RowActionMenu, Theme, Toast, ViewMode } from './types'
@@ -182,6 +183,9 @@ function App() {
 
   const selectedItems = useMemo(() => items.filter((item) => selectedNames.has(item.name)), [items, selectedNames])
   const selected = selectedItems.length === 1 ? selectedItems[0] : null
+  const virtualResetKey = `${directory}\u0000${activeSearch}`
+  const gridWindow = useVirtualWindow({ enabled: viewMode === 'grid' && !error && !loading && items.length > 0, itemCount: items.length, mode: 'grid', resetKey: virtualResetKey })
+  const listWindow = useVirtualWindow({ enabled: viewMode === 'list' && !error && !loading && items.length > 0, itemCount: items.length, mode: 'list', resetKey: virtualResetKey })
 
   const breadcrumbs = directory.split('/').filter(Boolean)
 
@@ -336,19 +340,25 @@ function App() {
       )
     }
     if (viewMode === 'grid') {
+      const visibleItems = items.slice(gridWindow.startIndex, gridWindow.endIndex)
       return (
-        <div className="file-grid-view" onDragOver={handleFileDragOver} onDrop={handleFileDrop} onPointerDown={startItemSelection} onPointerMove={updateItemSelection} onPointerUp={endItemSelection} onPointerCancel={endItemSelection}>
-          <div className="file-grid">
-            {items.map((item) => <FileCard key={item.name} item={item} thumbnailSource={endpoint(joinPath(directory, item.name)).toString()} selected={selectedNames.has(item.name)} draggable={canMove} dragging={draggedItem?.name === item.name} dropTarget={dropTargetName === item.name} onSelect={(event) => selectItem(item, event)} onOpen={() => openItem(item)} onDragStart={startDrag} onDragEnd={endDrag} onDragOver={dragOverDirectory} onDragLeave={leaveDirectory} onDrop={dropIntoDirectory} />)}
+        <div className="file-grid-view" ref={gridWindow.scrollRef} onScroll={gridWindow.onScroll} onDragOver={handleFileDragOver} onDrop={handleFileDrop} onPointerDown={startItemSelection} onPointerMove={updateItemSelection} onPointerUp={endItemSelection} onPointerCancel={endItemSelection}>
+          <div className="file-grid virtualized-grid" style={{ height: gridWindow.totalHeight }}>
+            <div className="file-virtual-grid-items" style={{ gridTemplateColumns: `repeat(${gridWindow.columns}, minmax(0, 1fr))`, transform: `translateY(${gridWindow.offsetY}px)` }}>
+              {visibleItems.map((item) => <FileCard key={item.name} item={item} thumbnailSource={endpoint(joinPath(directory, item.name)).toString()} selected={selectedNames.has(item.name)} draggable={canMove} dragging={draggedItem?.name === item.name} dropTarget={dropTargetName === item.name} onSelect={(event) => selectItem(item, event)} onOpen={() => openItem(item)} onDragStart={startDrag} onDragEnd={endDrag} onDragOver={dragOverDirectory} onDragLeave={leaveDirectory} onDrop={dropIntoDirectory} />)}
+            </div>
           </div>
           {selectionBox && <div className="selection-marquee" aria-hidden="true" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} />}
         </div>
       )
     }
+    const visibleItems = items.slice(listWindow.startIndex, listWindow.endIndex)
     return (
-      <div className="file-list-view" onDragOver={handleFileDragOver} onDrop={handleFileDrop} onPointerDown={startItemSelection} onPointerMove={updateItemSelection} onPointerUp={endItemSelection} onPointerCancel={endItemSelection}>
-        <div className="file-list" role="table" aria-label="Files">
-          {items.map((item) => <FileRow key={item.name} item={item} selected={selectedNames.has(item.name)} draggable={canMove} dragging={draggedItem?.name === item.name} dropTarget={dropTargetName === item.name} onSelect={(event) => selectItem(item, event)} onOpen={() => openItem(item)} onMenu={openRowActionMenu} onDragStart={startDrag} onDragEnd={endDrag} onDragOver={dragOverDirectory} onDragLeave={leaveDirectory} onDrop={dropIntoDirectory} />)}
+      <div className="file-list-view" ref={listWindow.scrollRef} onScroll={listWindow.onScroll} onDragOver={handleFileDragOver} onDrop={handleFileDrop} onPointerDown={startItemSelection} onPointerMove={updateItemSelection} onPointerUp={endItemSelection} onPointerCancel={endItemSelection}>
+        <div className="file-list" role="table" aria-label="Files" aria-rowcount={items.length} style={{ height: listWindow.totalHeight }}>
+          <div className="file-virtual-list-items" role="rowgroup" style={{ transform: `translateY(${listWindow.offsetY}px)` }}>
+            {visibleItems.map((item) => <FileRow key={item.name} item={item} selected={selectedNames.has(item.name)} draggable={canMove} dragging={draggedItem?.name === item.name} dropTarget={dropTargetName === item.name} onSelect={(event) => selectItem(item, event)} onOpen={() => openItem(item)} onMenu={openRowActionMenu} onDragStart={startDrag} onDragEnd={endDrag} onDragOver={dragOverDirectory} onDragLeave={leaveDirectory} onDrop={dropIntoDirectory} />)}
+          </div>
         </div>
         {selectionBox && <div className="selection-marquee" aria-hidden="true" style={{ left: selectionBox.left, top: selectionBox.top, width: selectionBox.width, height: selectionBox.height }} />}
       </div>
