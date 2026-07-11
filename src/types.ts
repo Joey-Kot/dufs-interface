@@ -99,6 +99,13 @@ export interface FormDialog {
   onSubmit: (value: string) => Promise<void>
 }
 
+export interface ConfirmDialog {
+  title: string
+  message: string
+  confirmLabel: string
+  onConfirm: () => Promise<void>
+}
+
 export interface RowActionMenu {
   item: PathItem
   top: number

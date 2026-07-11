@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { unzipSync, zipSync } from 'fflate'
 import { hasExtension, isBinaryContent, isDirectory, isEditableFile, previewKind } from '../lib/files'
 import { directoryPath, joinPath } from '../lib/paths'
-import type { FormDialog, PathItem, Toast } from '../types'
+import type { ConfirmDialog, FormDialog, PathItem, Toast } from '../types'
 
 type Endpoint = (path: string, query?: Record<string, string>) => URL
 type RunOperation = (label: string, operation: () => Promise<void>, message: string) => Promise<void>
@@ -22,6 +22,7 @@ interface UseFileOperationsOptions {
 
 export function useFileOperations({ allowArchive, assertOk, clearSelection, directory, endpoint, navigate, notify, run, selectedItems, setBusy }: UseFileOperationsOptions) {
   const [dialog, setDialog] = useState<FormDialog | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null)
   const [editor, setEditor] = useState<{ item: PathItem; content: string } | null>(null)
   const [preview, setPreview] = useState<PathItem | null>(null)
 
@@ -94,12 +95,18 @@ export function useFileOperations({ allowArchive, assertOk, clearSelection, dire
     })
   }
 
-  const deleteItem = async (item: PathItem) => {
-    if (!window.confirm(`Delete "${item.name}"? This cannot be undone.`)) return
-    await run('delete', async () => {
-      const response = await fetch(endpoint(joinPath(directory, item.name)), { method: 'DELETE', credentials: 'same-origin' })
-      await assertOk(response)
-    }, `Deleted "${item.name}"`)
+  const deleteItem = (item: PathItem) => {
+    setConfirmDialog({
+      title: `Delete “${item.name}”?`,
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        await run('delete', async () => {
+          const response = await fetch(endpoint(joinPath(directory, item.name)), { method: 'DELETE', credentials: 'same-origin' })
+          await assertOk(response)
+        }, `Deleted "${item.name}"`)
+      },
+    })
   }
 
   const openEditor = async (item: PathItem) => {
@@ -194,15 +201,23 @@ export function useFileOperations({ allowArchive, assertOk, clearSelection, dire
     }
   }
 
-  const deleteSelection = async () => {
-    if (!selectedItems.length || !window.confirm(`Delete ${selectedItems.length} selected items? This cannot be undone.`)) return
-    await run('delete-selection', async () => {
-      for (const item of selectedItems) {
-        const response = await fetch(endpoint(joinPath(directory, item.name)), { method: 'DELETE', credentials: 'same-origin' })
-        await assertOk(response)
-      }
-    }, `Deleted ${selectedItems.length} selected items`)
-    clearSelection()
+  const deleteSelection = () => {
+    if (!selectedItems.length) return
+    const itemsToDelete = [...selectedItems]
+    setConfirmDialog({
+      title: `Delete ${itemsToDelete.length} selected ${itemsToDelete.length === 1 ? 'item' : 'items'}?`,
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete selected items',
+      onConfirm: async () => {
+        await run('delete-selection', async () => {
+          for (const item of itemsToDelete) {
+            const response = await fetch(endpoint(joinPath(directory, item.name)), { method: 'DELETE', credentials: 'same-origin' })
+            await assertOk(response)
+          }
+        }, `Deleted ${itemsToDelete.length} selected items`)
+        clearSelection()
+      },
+    })
   }
 
   const openItem = (item: PathItem) => {
@@ -215,5 +230,5 @@ export function useFileOperations({ allowArchive, assertOk, clearSelection, dire
   }
 
   const canDownloadSelection = selectedItems.length > 0 && (!selectedItems.some(isDirectory) || Boolean(allowArchive))
-  return { canDownloadSelection, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, openEditor, openItem, preview, renameItem, saveEditor, setDialog, setEditor, setPreview }
+  return { canDownloadSelection, confirmDialog, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, openEditor, openItem, preview, renameItem, saveEditor, setConfirmDialog, setDialog, setEditor, setPreview }
 }

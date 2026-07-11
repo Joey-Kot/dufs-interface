@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react'
 import { EditorDialog } from './components/dialogs/EditorDialog'
+import { ConfirmDialog } from './components/dialogs/ConfirmDialog'
 import { FormDialog } from './components/dialogs/FormDialog'
 import { EntryIcon, FileCard, FileRow } from './components/files/FileItems'
 import { MediaPreview } from './components/previews/MediaPreview'
@@ -246,7 +247,7 @@ function App() {
     run,
   })
 
-  const { canDownloadSelection, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, openEditor, openItem, preview, renameItem, saveEditor, setDialog, setEditor, setPreview } = useFileOperations({
+  const { canDownloadSelection, confirmDialog, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, openEditor, openItem, preview, renameItem, saveEditor, setConfirmDialog, setDialog, setEditor, setPreview } = useFileOperations({
     allowArchive: data?.allow_archive,
     assertOk,
     clearSelection,
@@ -529,6 +530,7 @@ function App() {
       )}
       {toast && <div className={`toast ${toast.tone}`} role="status"><span>{toast.tone === 'error' ? <X size={16} /> : <Check size={16} />}</span>{toast.message}<button type="button" onClick={() => setToast(null)} title="Dismiss"><X size={15} /></button></div>}
       {dialog && <FormDialog dialog={dialog} onClose={() => setDialog(null)} />}
+      {confirmDialog && <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />}
       {editor && <EditorDialog editor={editor} onChange={(content) => setEditor({ ...editor, content })} onClose={() => setEditor(null)} onSave={() => void saveEditor()} />}
       {preview && <MediaPreview item={preview} source={endpoint(joinPath(directory, preview.name)).toString()} onClose={() => setPreview(null)} />}
       {textPreview && <TextPreview item={textPreview} source={endpoint(joinPath(directory, textPreview.name)).toString()} onClose={() => setTextPreview(null)} />}
