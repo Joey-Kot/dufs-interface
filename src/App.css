@@ -361,7 +361,6 @@
   .directory-meta { padding: 16px 16px 0; margin-bottom: 14px; }
   .editor-backdrop { padding: 10px; }
   .editor-modal { padding: 14px; }
-  .editor-actions .action-button { display: none; }
   .editor-modal textarea { min-height: 65vh; font-size: 12px; }
   .media-preview-backdrop { padding: 10px; }
   .media-preview-modal { max-height: calc(100vh - 20px); }

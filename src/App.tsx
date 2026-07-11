@@ -150,6 +150,7 @@ const INDEX_DATA_MARKER = ['__INDEX', 'DATA__'].join('_')
 const IMAGE_FILE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp|ico|tiff?)$/i
 const AUDIO_FILE = /\.(?:mp3|ogg|opus|flac|m4a|aac|wav)$/i
 const VIDEO_FILE = /\.(?:mp4|mkv|webm|mov)$/i
+const TOUCH_DOUBLE_TAP_DELAY = 350
 
 function getBootstrapData(): Partial<DirectoryData> & { uri_prefix?: string } {
   const encoded = document.getElementById('index-data')?.textContent?.trim()
@@ -1304,12 +1305,45 @@ interface DragDropItemProps {
   onDrop: (item: PathItem, event: React.DragEvent) => void
 }
 
+function useTouchDoubleTapOpen(onOpen: () => void) {
+  const lastTouchTapRef = useRef(0)
+  const ignoreNativeDoubleClickRef = useRef(false)
+
+  const handlePointerUp = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'touch') return
+
+    const elapsed = event.timeStamp - lastTouchTapRef.current
+    if (elapsed <= 0 || elapsed > TOUCH_DOUBLE_TAP_DELAY) {
+      lastTouchTapRef.current = event.timeStamp
+      return
+    }
+
+    lastTouchTapRef.current = 0
+    ignoreNativeDoubleClickRef.current = true
+    event.preventDefault()
+    onOpen()
+    window.setTimeout(() => { ignoreNativeDoubleClickRef.current = false }, TOUCH_DOUBLE_TAP_DELAY)
+  }, [onOpen])
+
+  const handleDoubleClick = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    if (ignoreNativeDoubleClickRef.current) {
+      ignoreNativeDoubleClickRef.current = false
+      event.preventDefault()
+      return
+    }
+    onOpen()
+  }, [onOpen])
+
+  return { handlePointerUp, handleDoubleClick }
+}
+
 function FileCard({ item, thumbnailSource, selected, onSelect, onOpen, draggable, dragging, dropTarget, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }: { item: PathItem; thumbnailSource: string; selected: boolean; onSelect: (event: React.MouseEvent) => void; onOpen: () => void } & DragDropItemProps) {
   const isDir = isDirectory(item)
   const mediaKind = previewKind(item)
   const hasThumbnail = mediaKind === 'image' || mediaKind === 'audio' || mediaKind === 'video'
+  const { handlePointerUp, handleDoubleClick } = useTouchDoubleTapOpen(onOpen)
   return (
-    <button className={`file-card ${selected ? 'selected' : ''} ${isDir ? 'folder-item' : ''} ${dragging ? 'is-dragging' : ''} ${dropTarget ? 'drop-target' : ''}`} data-item-name={item.name} type="button" draggable={draggable} onClick={onSelect} onDoubleClick={onOpen} onDragStart={(event) => onDragStart(item, event)} onDragEnd={onDragEnd} onDragOver={(event) => onDragOver(item, event)} onDragLeave={(event) => onDragLeave(item, event)} onDrop={(event) => onDrop(item, event)}>
+    <button className={`file-card ${selected ? 'selected' : ''} ${isDir ? 'folder-item' : ''} ${dragging ? 'is-dragging' : ''} ${dropTarget ? 'drop-target' : ''}`} data-item-name={item.name} type="button" draggable={draggable} onClick={onSelect} onPointerUp={handlePointerUp} onDoubleClick={handleDoubleClick} onDragStart={(event) => onDragStart(item, event)} onDragEnd={onDragEnd} onDragOver={(event) => onDragOver(item, event)} onDragLeave={(event) => onDragLeave(item, event)} onDrop={(event) => onDrop(item, event)}>
       <span className="selection-indicator" aria-hidden="true">{selected ? <Check size={11} strokeWidth={3} /> : null}</span>
       <span className={`card-thumb ${hasThumbnail ? 'media-thumb' : ''}`}>
         <EntryIcon item={item} size={36} />
@@ -1453,8 +1487,10 @@ function parseFlacCover(bytes: Uint8Array): Blob | null {
 
 function FileRow({ item, selected, onSelect, onOpen, onMenu, draggable, dragging, dropTarget, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop }: { item: PathItem; selected: boolean; onSelect: (event: React.MouseEvent) => void; onOpen: () => void; onMenu: (item: PathItem, anchor: HTMLButtonElement) => void } & DragDropItemProps) {
   const isDir = isDirectory(item)
+  const { handlePointerUp, handleDoubleClick } = useTouchDoubleTapOpen(onOpen)
+  const isRowAction = (event: React.SyntheticEvent<HTMLElement>) => Boolean((event.target as HTMLElement).closest('.row-more'))
   return (
-    <div className={`file-row ${selected ? 'selected' : ''} ${dragging ? 'is-dragging' : ''} ${dropTarget ? 'drop-target' : ''}`} data-item-name={item.name} role="row" tabIndex={0} draggable={draggable} onClick={onSelect} onDoubleClick={onOpen} onDragStart={(event) => onDragStart(item, event)} onDragEnd={onDragEnd} onDragOver={(event) => onDragOver(item, event)} onDragLeave={(event) => onDragLeave(item, event)} onDrop={(event) => onDrop(item, event)} onKeyDown={(event) => {
+    <div className={`file-row ${selected ? 'selected' : ''} ${dragging ? 'is-dragging' : ''} ${dropTarget ? 'drop-target' : ''}`} data-item-name={item.name} role="row" tabIndex={0} draggable={draggable} onClick={onSelect} onPointerUp={(event) => { if (!isRowAction(event)) handlePointerUp(event) }} onDoubleClick={(event) => { if (!isRowAction(event)) handleDoubleClick(event) }} onDragStart={(event) => onDragStart(item, event)} onDragEnd={onDragEnd} onDragOver={(event) => onDragOver(item, event)} onDragLeave={(event) => onDragLeave(item, event)} onDrop={(event) => onDrop(item, event)} onKeyDown={(event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault()
         onSelect(event as unknown as React.MouseEvent)
