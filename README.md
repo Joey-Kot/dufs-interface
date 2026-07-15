@@ -150,3 +150,7 @@ scripts/
 - `lucide-react`：界面图标。
 - `fflate`：批量下载时在浏览器中合并 ZIP。
 - `jsmediatags`：读取常见音频容器的内嵌封面；仅在可见音频卡片需要时动态加载。
+
+## 许可证
+
+本项目采用 MIT 许可证，详见 [LICENSE](LICENSE)。

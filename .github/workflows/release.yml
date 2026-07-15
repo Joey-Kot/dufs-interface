@@ -41,6 +41,7 @@ jobs:
       - name: Package release assets
         run: |
           mkdir release
+          cp LICENSE dist/LICENSE
           cd dist
           zip -r ../release/dufs-interface-assets.zip .
           cd ../release
