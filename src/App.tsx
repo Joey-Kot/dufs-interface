@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Check,
   ChevronRight,
   Copy,
@@ -44,7 +47,7 @@ import { useUploads } from './hooks/useUploads'
 import { useVirtualWindow } from './hooks/useVirtualWindow'
 import { extension, formatBytes, formatDate, isDirectory, isEditableFile, previewKind, textPreviewKind } from './lib/files'
 import { joinPath, parentPath } from './lib/paths'
-import type { DirectoryData, PathItem, RowActionMenu, Theme, Toast, ViewMode } from './types'
+import type { DirectoryData, PathItem, RowActionMenu, SortKey, Theme, Toast, ViewMode } from './types'
 import './App.css'
 
 const DEFAULT_SERVER = window.location.origin
@@ -111,7 +114,7 @@ function App() {
     throw new Error(text || `Request failed (${response.status})`)
   }, [])
 
-  const { activeSearch, data, directory, embeddedPage, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch } = useDirectory({
+  const { activeSearch, cycleSort, data, directory, embeddedPage, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch, sort } = useDirectory({
     assertOk,
     endpoint,
     initialDirectory: bootstrap.href || '/',
@@ -188,7 +191,7 @@ function App() {
 
   const selectedItems = useMemo(() => items.filter((item) => selectedNames.has(item.name)), [items, selectedNames])
   const selected = selectedItems.length === 1 ? selectedItems[0] : null
-  const virtualResetKey = `${directory}\u0000${activeSearch}`
+  const virtualResetKey = `${directory}\u0000${activeSearch}\u0000${sort?.key ?? 'default'}:${sort?.direction ?? 'default'}`
   const gridWindow = useVirtualWindow({ enabled: viewMode === 'grid' && !error && !loading && items.length > 0, itemCount: items.length, mode: 'grid', resetKey: virtualResetKey })
   const listWindow = useVirtualWindow({ enabled: viewMode === 'list' && !error && !loading && items.length > 0, itemCount: items.length, mode: 'list', resetKey: virtualResetKey })
 
@@ -310,6 +313,17 @@ function App() {
       setUploadQueueOpen(next)
       return next
     })
+  }
+
+  const sortHeader = (key: SortKey, label: string) => {
+    const direction = sort?.key === key ? sort.direction : null
+    const nextAction = direction === 'ascending' ? 'sort descending' : direction === 'descending' ? 'restore default order' : 'sort ascending'
+    const SortIcon = direction === 'ascending' ? ArrowUp : direction === 'descending' ? ArrowDown : ArrowUpDown
+    return (
+      <button className={`file-list-sort ${direction ?? 'default'}`} type="button" onClick={() => cycleSort(key)} aria-label={`${label}: ${nextAction}`} aria-pressed={Boolean(direction)} title={`${label}: ${nextAction}`}>
+        <span>{label}</span><SortIcon size={14} strokeWidth={2.25} aria-hidden="true" />
+      </button>
+    )
   }
 
   const renderFileArea = () => {
@@ -480,7 +494,12 @@ function App() {
               <span>{isSearching ? 'Searching...' : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}</span>
             </div>
             {!error && !loading && !embeddedPage && items.length > 0 && viewMode === 'list' && (
-              <div className="file-list-header" role="row"><span>Name</span><span>Modified</span><span>Size</span><span aria-label="Actions" /></div>
+              <div className="file-list-header" role="row">
+                {sortHeader('name', 'Name')}
+                {sortHeader('mtime', 'Modified')}
+                {sortHeader('size', 'Size')}
+                <span aria-label="Actions" />
+              </div>
             )}
           </div>
 

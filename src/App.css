@@ -188,9 +188,14 @@
 .file-virtual-list-items { position: absolute; top: 0; left: 0; width: 100%; will-change: transform; }
 .file-list-header, .file-row { box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, .8fr) 90px 30px; align-items: center; gap: 16px; }
 .file-list-header { margin: 0 12px; padding: 0 24px; height: 36px; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--line); background: var(--surface); user-select: none; }
-.file-list-header span, .file-row > span { min-width: 0; }
-.file-list-header span { cursor: default; }
-.file-list-header > span:first-child { padding-left: 58px; }
+.file-list-header > *, .file-row > span { min-width: 0; }
+.file-list-header > :first-child { padding-left: 58px; }
+.file-list-sort { min-width: 0; display: inline-flex; align-items: center; gap: 5px; padding: 0; color: inherit; background: transparent; border: 0; font: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit; text-align: left; text-transform: inherit; cursor: pointer; }
+.file-list-sort span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-list-sort svg { flex: 0 0 auto; opacity: .42; transition: var(--transition); }
+.file-list-sort:hover { color: var(--ink); }
+.file-list-sort:hover svg, .file-list-sort.ascending svg, .file-list-sort.descending svg { opacity: 1; }
+.file-list-sort.ascending, .file-list-sort.descending { color: var(--ink); }
 .file-row { width: 100%; padding: 0 24px; height: 50px; color: var(--muted); background: transparent; border: 1px solid transparent; cursor: pointer; font-size: 13px; text-align: left; transition: var(--transition); }
 .file-row:hover { background: var(--surface-hover); }
 .file-row.selected { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 24%, transparent); border-radius: var(--radius-sm); }
@@ -419,7 +424,7 @@
   .file-list-view { padding: 0 16px 16px; }
   .file-list-header, .file-row { grid-template-columns: minmax(140px, 1fr) 70px 24px; gap: 8px; padding: 0 16px; }
   .file-list-header { margin: 0 16px; }
-  .file-list-header span:nth-child(2), .file-row > span:nth-child(2) { display: none; }
+  .file-list-header > :nth-child(2), .file-row > span:nth-child(2) { display: none; }
   .file-row > span:nth-child(3) { font-size: 11px; }
   .file-row .row-more { opacity: .78; }
   .directory-meta { padding: 16px 16px 0; margin-bottom: 14px; }

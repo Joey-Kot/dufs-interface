@@ -2,6 +2,13 @@ export type PathType = 'Dir' | 'SymlinkDir' | 'File' | 'SymlinkFile'
 export type ViewMode = 'grid' | 'list'
 export type Theme = 'light' | 'dark'
 export type PreviewKind = 'image' | 'audio' | 'video'
+export type SortKey = 'name' | 'mtime' | 'size'
+export type SortDirection = 'ascending' | 'descending'
+
+export interface SortState {
+  key: SortKey
+  direction: SortDirection
+}
 
 export interface PathItem {
   path_type: PathType

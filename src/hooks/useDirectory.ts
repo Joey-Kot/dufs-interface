@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { isDirectory } from '../lib/files'
 import { directoryPath } from '../lib/paths'
-import type { DirectoryData, PathItem } from '../types'
+import type { DirectoryData, PathItem, SortKey, SortState } from '../types'
 
 type Endpoint = (path: string, query?: Record<string, string>) => URL
 
@@ -22,7 +22,16 @@ export function useDirectory({ assertOk, endpoint, initialDirectory, onSelection
   const [searchResults, setSearchResults] = useState<PathItem[] | null>(null)
   const [searchResultQuery, setSearchResultQuery] = useState<string | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [sort, setSort] = useState<SortState | null>(null)
   const activeSearch = search.trim()
+
+  const cycleSort = useCallback((key: SortKey) => {
+    setSort((current) => {
+      if (current?.key !== key) return { key, direction: 'ascending' }
+      if (current.direction === 'ascending') return { key, direction: 'descending' }
+      return null
+    })
+  }, [])
 
   const loadDirectory = useCallback(async (path = directory) => {
     setLoading(true)
@@ -111,11 +120,33 @@ export function useDirectory({ assertOk, endpoint, initialDirectory, onSelection
     const paths = activeSearch
       ? searchResultQuery === activeSearch ? searchResults ?? [] : data?.paths ?? []
       : data?.paths ?? []
-    return [...paths].sort((left, right) => {
-      if (isDirectory(left) !== isDirectory(right)) return isDirectory(left) ? -1 : 1
-      return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' })
-    })
-  }, [activeSearch, data, searchResultQuery, searchResults])
+    return [...paths].sort((left, right) => compareItems(left, right, sort))
+  }, [activeSearch, data, searchResultQuery, searchResults, sort])
 
-  return { activeSearch, data, directory, embeddedPage, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch }
+  return { activeSearch, cycleSort, data, directory, embeddedPage, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch, sort }
+}
+
+function compareItems(left: PathItem, right: PathItem, sort: SortState | null) {
+  if (!sort) {
+    if (isDirectory(left) !== isDirectory(right)) return isDirectory(left) ? -1 : 1
+    return compareNames(left, right)
+  }
+
+  if (sort.key === 'size') {
+    if (isDirectory(left) !== isDirectory(right)) return isDirectory(left) ? 1 : -1
+    if (isDirectory(left)) return compareNames(left, right)
+  }
+
+  const direction = sort.direction === 'ascending' ? 1 : -1
+  const primary = sort.key === 'name'
+    ? compareNames(left, right)
+    : sort.key === 'mtime'
+      ? left.mtime - right.mtime
+      : left.size - right.size
+
+  return primary === 0 ? compareNames(left, right) : primary * direction
+}
+
+function compareNames(left: PathItem, right: PathItem) {
+  return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' })
 }
