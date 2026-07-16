@@ -15,6 +15,7 @@ interface UseDirectoryOptions {
 export function useDirectory({ assertOk, endpoint, initialDirectory, onSelectionReset }: UseDirectoryOptions) {
   const [directory, setDirectory] = useState(() => directoryPath(initialDirectory))
   const [data, setData] = useState<DirectoryData | null>(null)
+  const [embeddedPage, setEmbeddedPage] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
@@ -29,10 +30,20 @@ export function useDirectory({ assertOk, endpoint, initialDirectory, onSelection
     try {
       const response = await fetch(endpoint(path, { json: '' }), { credentials: 'same-origin' })
       await assertOk(response)
-      setData((await response.json()) as DirectoryData)
+      const payload = await response.text()
+      try {
+        setData(JSON.parse(payload) as DirectoryData)
+        setEmbeddedPage(false)
+      } catch {
+        if (!/^\s*<(?:!doctype\s+html|html\b)/i.test(payload)) throw new Error('The server returned an invalid directory response.')
+        // A directory with an index.html can handle the request before Dufs returns its JSON listing.
+        setData(null)
+        setEmbeddedPage(true)
+      }
       onSelectionReset(new Set())
     } catch (requestError) {
       setData(null)
+      setEmbeddedPage(false)
       setError(requestError instanceof Error ? requestError.message : 'Unable to reach the Dufs server.')
     } finally {
       setLoading(false)
@@ -92,6 +103,7 @@ export function useDirectory({ assertOk, endpoint, initialDirectory, onSelection
     setSearchResults(null)
     setSearchResultQuery(null)
     setIsSearching(false)
+    setEmbeddedPage(false)
     setDirectory(directoryPath(nextDirectory))
   }
 
@@ -105,5 +117,5 @@ export function useDirectory({ assertOk, endpoint, initialDirectory, onSelection
     })
   }, [activeSearch, data, searchResultQuery, searchResults])
 
-  return { activeSearch, data, directory, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch }
+  return { activeSearch, data, directory, embeddedPage, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch }
 }

@@ -32,6 +32,7 @@ import { FormDialog } from './components/dialogs/FormDialog'
 import { EntryIcon, FileCard, FileRow } from './components/files/FileItems'
 import { MediaPreview } from './components/previews/MediaPreview'
 import { TextPreview } from './components/previews/TextPreview'
+import { EmbeddedPagePreview } from './components/previews/EmbeddedPagePreview'
 import { UploadQueue } from './components/upload/UploadQueue'
 import { useDirectory } from './hooks/useDirectory'
 import { useDragAndDrop } from './hooks/useDragAndDrop'
@@ -108,7 +109,7 @@ function App() {
     throw new Error(text || `Request failed (${response.status})`)
   }, [])
 
-  const { activeSearch, data, directory, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch } = useDirectory({
+  const { activeSearch, data, directory, embeddedPage, error, isSearching, items, loadDirectory, loading, navigate, search, setSearch } = useDirectory({
     assertOk,
     endpoint,
     initialDirectory: bootstrap.href || '/',
@@ -329,6 +330,9 @@ function App() {
         </div>
       )
     }
+    if (embeddedPage) {
+      return <EmbeddedPagePreview name={breadcrumbs.at(-1) ?? 'Embedded page'} source={endpoint(directory).toString()} />
+    }
     if (items.length === 0) {
       return (
         <div className="state-section">
@@ -473,7 +477,7 @@ function App() {
               </div>
               <span>{isSearching ? 'Searching...' : `${items.length} ${items.length === 1 ? 'item' : 'items'}`}</span>
             </div>
-            {!error && !loading && items.length > 0 && viewMode === 'list' && (
+            {!error && !loading && !embeddedPage && items.length > 0 && viewMode === 'list' && (
               <div className="file-list-header" role="row"><span>Name</span><span>Modified</span><span>Size</span><span aria-label="Actions" /></div>
             )}
           </div>
