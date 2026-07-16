@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { unzipSync, zipSync } from 'fflate'
 import { hasExtension, isBinaryContent, isDirectory, isEditableFile, previewKind } from '../lib/files'
 import { directoryPath, joinPath } from '../lib/paths'
-import type { ConfirmDialog, FormDialog, PathItem, Toast } from '../types'
+import type { ConfirmDialog, FormDialog, MoveDialogState, PathItem, Toast } from '../types'
 
 type Endpoint = (path: string, query?: Record<string, string>) => URL
 type RunOperation = (label: string, operation: () => Promise<void>, message: string) => Promise<void>
@@ -25,6 +25,7 @@ export function useFileOperations({ allowArchive, assertOk, clearSelection, dire
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(null)
   const [editor, setEditor] = useState<{ item: PathItem; content: string } | null>(null)
   const [preview, setPreview] = useState<PathItem | null>(null)
+  const [moveDialog, setMoveDialog] = useState<MoveDialogState | null>(null)
 
   const createDirectory = () => {
     setDialog({
@@ -105,6 +106,33 @@ export function useFileOperations({ allowArchive, assertOk, clearSelection, dire
           const response = await fetch(endpoint(joinPath(directory, item.name)), { method: 'DELETE', credentials: 'same-origin' })
           await assertOk(response)
         }, `Deleted "${item.name}"`)
+      },
+    })
+  }
+
+  const moveItems = (items: PathItem[]) => {
+    if (!items.length) return
+    const itemsToMove = [...items]
+    setMoveDialog({
+      itemCount: itemsToMove.length,
+      onMove: async (destination) => {
+        const targetDirectory = directoryPath(destination)
+        const invalidFolder = itemsToMove.find((item) => isDirectory(item) && (targetDirectory === directoryPath(joinPath(directory, item.name)) || targetDirectory.startsWith(directoryPath(joinPath(directory, item.name)))))
+        if (invalidFolder) throw new Error(`Cannot move folder “${invalidFolder.name}” into itself.`)
+        if (targetDirectory === directoryPath(directory)) throw new Error('Choose a different destination folder.')
+
+        await run('move', async () => {
+          for (const item of itemsToMove) {
+            const source = joinPath(directory, item.name)
+            const response = await fetch(endpoint(source), {
+              method: 'MOVE',
+              headers: { Destination: endpoint(joinPath(targetDirectory, item.name)).toString(), Overwrite: 'F' },
+              credentials: 'same-origin',
+            })
+            await assertOk(response)
+          }
+        }, `Moved ${itemsToMove.length} ${itemsToMove.length === 1 ? 'item' : 'items'}`)
+        clearSelection()
       },
     })
   }
@@ -230,5 +258,5 @@ export function useFileOperations({ allowArchive, assertOk, clearSelection, dire
   }
 
   const canDownloadSelection = selectedItems.length > 0 && (!selectedItems.some(isDirectory) || Boolean(allowArchive))
-  return { canDownloadSelection, confirmDialog, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, openEditor, openItem, preview, renameItem, saveEditor, setConfirmDialog, setDialog, setEditor, setPreview }
+  return { canDownloadSelection, confirmDialog, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, moveDialog, moveItems, openEditor, openItem, preview, renameItem, saveEditor, setConfirmDialog, setDialog, setEditor, setMoveDialog, setPreview }
 }

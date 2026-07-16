@@ -229,7 +229,7 @@
 .details-empty h3, .details-bulk h3 { margin: 12px 0 5px; color: var(--ink);  font-weight: 660; }
 .details-empty p, .details-bulk p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
 .details-bulk-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
-.details-bulk-actions .action-button { grid-column: 1 / -1; }
+.details-bulk-actions button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 /* ===== Row Actions ===== */
 .row-actions-menu { position: fixed; z-index: 40; width: 196px; padding: 6px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); animation: fade-in .12s var(--ease-out); }
@@ -270,7 +270,7 @@
 
 /* ===== Modals ===== */
 .modal-backdrop { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(10, 16, 26, .48); backdrop-filter: blur(4px); animation: fade-in .15s var(--ease-out); }
-.form-modal, .confirm-modal, .editor-modal { width: min(460px, 100%); padding: 22px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); animation: modal-in .25s var(--ease-spring); }
+.form-modal, .confirm-modal, .editor-modal, .move-modal { width: min(460px, 100%); padding: 22px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); animation: modal-in .25s var(--ease-spring); }
 .modal-heading { justify-content: space-between; gap: 14px; margin-bottom: 22px; }
 .form-modal h2, .confirm-modal h2, .editor-modal h2 { font-size: 17px; letter-spacing: -.01em; margin: 3px 0 0; font-weight: 680; }
 .form-modal label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 630; }
@@ -286,6 +286,20 @@
 .editor-modal { width: min(900px, 100%); padding: 20px; }
 .editor-modal textarea { width: 100%; min-height: min(60vh, 600px); resize: vertical; padding: 14px; color: var(--ink); background: var(--surface-hover); border: 1px solid var(--line); border-radius: var(--radius-sm); outline: none; font-family: var(--font-mono); font-size: 13px; line-height: 1.55; transition: var(--transition); box-sizing: border-box; }
 .editor-modal textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.move-modal { width: min(680px, 100%); }
+.move-path-field { display: flex; align-items: center; gap: 8px; }
+.move-path-field .icon-button { flex: 0 0 auto; }
+.move-path-field input { min-width: 0; width: 100%; height: 42px; padding: 0 12px; color: var(--ink); background: var(--surface-hover); border: 1px solid var(--line); border-radius: var(--radius-sm); outline: none; font-family: var(--font-mono); font-size: 14px; box-sizing: border-box; transition: var(--transition); }
+.move-path-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.move-path-hint { margin: 9px 0 14px 44px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.move-folder-list { height: min(360px, 42vh); overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.move-folder-list button { width: 100%; min-height: 50px; display: flex; align-items: center; gap: 12px; padding: 0 16px; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--line-light); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.move-folder-list button:last-child { border-bottom: 0; }
+.move-folder-list button:hover { background: var(--surface-hover); }
+.move-folder-list button svg { flex: 0 0 auto; color: var(--folder); }
+.move-folder-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.move-folder-state { min-height: 130px; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 16px; color: var(--muted); font-size: 13px; text-align: center; }
+.move-folder-error { color: var(--danger); }
 
 /* ===== Media Preview ===== */
 .media-preview-backdrop { z-index: 50; padding: 24px; }

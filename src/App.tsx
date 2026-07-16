@@ -18,6 +18,7 @@ import {
   ListChecks,
   LoaderCircle,
   Moon,
+  Move,
   Pencil,
   RefreshCw,
   Search,
@@ -29,6 +30,7 @@ import {
 import { EditorDialog } from './components/dialogs/EditorDialog'
 import { ConfirmDialog } from './components/dialogs/ConfirmDialog'
 import { FormDialog } from './components/dialogs/FormDialog'
+import { MoveDialog } from './components/dialogs/MoveDialog'
 import { EntryIcon, FileCard, FileRow } from './components/files/FileItems'
 import { MediaPreview } from './components/previews/MediaPreview'
 import { TextPreview } from './components/previews/TextPreview'
@@ -254,7 +256,7 @@ function App() {
     run,
   })
 
-  const { canDownloadSelection, confirmDialog, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, openEditor, openItem, preview, renameItem, saveEditor, setConfirmDialog, setDialog, setEditor, setPreview } = useFileOperations({
+  const { canDownloadSelection, confirmDialog, copyItem, createDirectory, createFile, deleteItem, deleteSelection, dialog, download, downloadSelection, editor, moveDialog, moveItems, openEditor, openItem, preview, renameItem, saveEditor, setConfirmDialog, setDialog, setEditor, setMoveDialog, setPreview } = useFileOperations({
     allowArchive: data?.allow_archive,
     assertOk,
     clearSelection,
@@ -504,6 +506,7 @@ function App() {
                 {!isDirectory(selected) && <button className="action-button" type="button" onClick={() => void openEditor(selected)} disabled={!canWrite || !isEditableFile(selected)} title={isEditableFile(selected) ? undefined : 'This file format cannot be edited here.'}><Pencil size={15} /> Edit</button>}
                 <button className="action-button" type="button" onClick={() => renameItem(selected)} disabled={!canWrite || !canDelete}><Pencil size={15} /> Rename</button>
                 <button className="action-button" type="button" onClick={() => copyItem(selected)} disabled={!canWrite}><Copy size={15} /> Copy</button>
+                <button className="action-button" type="button" onClick={() => moveItems([selected])} disabled={!canMove}><Move size={15} /> Move</button>
                 <button className="danger-button" type="button" onClick={() => void deleteItem(selected)} disabled={!canDelete}><Trash2 size={15} /> Delete</button>
               </div>
             </>
@@ -514,6 +517,7 @@ function App() {
               <p>Manage the selected items from here.</p>
               <div className="details-bulk-actions">
                 <button className="primary-button" type="button" onClick={() => void downloadSelection()} disabled={!canDownloadSelection}><Download size={15} /> Download</button>
+                <button className="action-button" type="button" onClick={() => moveItems(selectedItems)} disabled={!canMove}><Move size={15} /> Move</button>
                 <button className="danger-button" type="button" onClick={() => void deleteSelection()} disabled={!canDelete}><Trash2 size={15} /> Delete</button>
                 <button className="action-button" type="button" onClick={clearSelection}>Clear selection</button>
               </div>
@@ -536,6 +540,7 @@ function App() {
           {!isDirectory(rowActionMenu.item) && <button type="button" role="menuitem" onClick={() => { void openEditor(rowActionMenu.item); setRowActionMenu(null) }} disabled={!canWrite || !isEditableFile(rowActionMenu.item)} title={isEditableFile(rowActionMenu.item) ? undefined : 'This file format cannot be edited here.'}><Pencil size={16} /> Edit</button>}
           <button type="button" role="menuitem" onClick={() => { renameItem(rowActionMenu.item); setRowActionMenu(null) }} disabled={!canWrite || !canDelete}><Pencil size={16} /> Rename</button>
           <button type="button" role="menuitem" onClick={() => { copyItem(rowActionMenu.item); setRowActionMenu(null) }} disabled={!canWrite}><Copy size={16} /> Copy</button>
+          <button type="button" role="menuitem" onClick={() => { moveItems(selectedItems.length > 1 && selectedNames.has(rowActionMenu.item.name) ? selectedItems : [rowActionMenu.item]); setRowActionMenu(null) }} disabled={!canMove}><Move size={16} /> {selectedItems.length > 1 && selectedNames.has(rowActionMenu.item.name) ? 'Move selection' : 'Move'}</button>
           <span className="row-actions-menu-divider" />
           <button className="danger" type="button" role="menuitem" onClick={() => {
             if (selectedItems.length > 1 && selectedNames.has(rowActionMenu.item.name)) void deleteSelection()
@@ -546,6 +551,7 @@ function App() {
       )}
       {toast && <div className={`toast ${toast.tone}`} role="status"><span>{toast.tone === 'error' ? <X size={16} /> : <Check size={16} />}</span>{toast.message}<button type="button" onClick={() => setToast(null)} title="Dismiss"><X size={15} /></button></div>}
       {dialog && <FormDialog dialog={dialog} onClose={() => setDialog(null)} />}
+      {moveDialog && <MoveDialog assertOk={assertOk} endpoint={endpoint} initialPath={directory} itemCount={moveDialog.itemCount} onClose={() => setMoveDialog(null)} onMove={moveDialog.onMove} />}
       {confirmDialog && <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />}
       {editor && <EditorDialog editor={editor} onChange={(content) => setEditor({ ...editor, content })} onClose={() => setEditor(null)} onSave={() => void saveEditor()} />}
       {preview && <MediaPreview item={preview} source={endpoint(joinPath(directory, preview.name)).toString()} onClose={() => setPreview(null)} />}

@@ -118,6 +118,11 @@ export interface ConfirmDialog {
   onConfirm: () => Promise<void>
 }
 
+export interface MoveDialogState {
+  itemCount: number
+  onMove: (destination: string) => Promise<void>
+}
+
 export interface RowActionMenu {
   item: PathItem
   top: number
