@@ -61,8 +61,12 @@ export function useVirtualWindow({ enabled, itemCount, mode, resetKey }: Virtual
     const observer = new ResizeObserver(updateMetrics)
     observer.observe(element)
     updateMetrics()
+
+    // A reload replaces the scroll container. Read the new node's actual position
+    // before calculating the virtual range instead of reusing a stale offset.
+    setScrollTop(element.scrollTop)
     return () => observer.disconnect()
-  }, [enabled, mode])
+  }, [enabled, itemCount, mode])
 
   useEffect(() => {
     const element = scrollRef.current
